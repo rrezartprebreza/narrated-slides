@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Narrated Slides</title>
+  <meta name="description" content="Turn a PowerPoint deck into a narrated MP4 video. Runs on your own computer with Docker.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    try {
+      var t = localStorage.getItem("ns-theme");
+      if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      document.documentElement.dataset.theme = t;
+    } catch (e) { document.documentElement.dataset.theme = "light"; }
+  </script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <div class="top-inner">
+      <a class="brand" href="#/" aria-label="Narrated Slides, home">
+        <img src="/static/logo.svg" alt="" width="30" height="30">
+        <span>Narrated Slides</span>
+      </a>
+
+      <ol class="steps" id="steps" hidden aria-label="Progress">
+        <li><a id="step-deck" href="#/"><span class="n">1</span><span class="t">Deck</span></a></li>
+        <li><a id="step-script" href="#/"><span class="n">2</span><span class="t">Script</span></a></li>
+        <li><a id="step-export" href="#/"><span class="n">3</span><span class="t">Voice &amp; export</span></a></li>
+      </ol>
+
+      <div class="top-actions">
+        <button class="pill" id="btn-status" type="button" aria-haspopup="dialog">
+          <span class="dot" id="status-dot"></span><span id="status-text">Checking…</span>
+        </button>
+        <button class="icon-btn" id="btn-theme" type="button" aria-label="Switch light or dark theme" title="Switch theme"></button>
+        <button class="icon-btn" id="btn-help" type="button" aria-label="Help" title="How it works"></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <!-- ============ HOME ============ -->
+    <section id="view-home" class="view">
+      <div class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Free · private · runs on your computer</p>
+          <h1>Turn your slides into a <span class="grad">narrated video</span>.</h1>
+          <p class="lead">Drop in a PowerPoint. Its speaker notes are read aloud by a natural AI voice, and you get a finished MP4 with subtitles. No account, no cloud, no per-minute fees.</p>
+
+          <div id="drop-wrap">
+            <label class="drop" id="drop" tabindex="0" role="button" aria-describedby="drop-hint">
+              <input type="file" id="file" accept=".pptx" hidden>
+              <span class="drop-icon" data-icon="upload" data-size="28"></span>
+              <span class="drop-title">Drop a .pptx here, or <u>browse</u></span>
+              <span class="drop-hint" id="drop-hint">Speaker notes become the script. Up to <span id="max-mb">100</span> MB.</span>
+            </label>
+            <div class="hero-actions">
+              <button class="btn" id="btn-sample" type="button"><span data-icon="play"></span>Try the sample deck</button>
+              <a class="btn ghost" href="/sample-deck.pptx" download><span data-icon="download"></span>Download sample</a>
+            </div>
+          </div>
+
+          <div class="busy" id="home-busy" hidden aria-live="polite">
+            <div class="busy-top"><span class="spinner" aria-hidden="true"></span><strong id="busy-title">Working…</strong><span class="pct" id="busy-pct"></span></div>
+            <div class="bar"><div class="fill" id="busy-fill"></div></div>
+            <p class="muted" id="busy-step"></p>
+          </div>
+          <p class="error" id="home-error" role="alert" hidden></p>
+        </div>
+
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 420 340" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6d4aff"/><stop offset="1" stop-color="#ff5f9e"/></linearGradient>
+            </defs>
+            <g class="art-card back2"><rect x="70" y="20" width="300" height="180" rx="16"/></g>
+            <g class="art-card back1"><rect x="45" y="45" width="300" height="180" rx="16"/></g>
+            <g class="art-card front">
+              <rect x="20" y="70" width="300" height="180" rx="16"/>
+              <rect x="44" y="96" width="120" height="14" rx="7" class="art-line strong"/>
+              <rect x="44" y="124" width="200" height="9" rx="4.5" class="art-line"/>
+              <rect x="44" y="144" width="170" height="9" rx="4.5" class="art-line"/>
+              <rect x="44" y="164" width="190" height="9" rx="4.5" class="art-line"/>
+              <rect x="236" y="176" width="64" height="52" rx="10" fill="url(#hg)" opacity=".9"/>
+            </g>
+            <g class="art-wave" transform="translate(40 282)">
+              <rect x="0" y="-8" width="8" height="16" rx="4"/><rect x="16" y="-18" width="8" height="36" rx="4"/>
+              <rect x="32" y="-26" width="8" height="52" rx="4"/><rect x="48" y="-14" width="8" height="28" rx="4"/>
+              <rect x="64" y="-22" width="8" height="44" rx="4"/><rect x="80" y="-10" width="8" height="20" rx="4"/>
+              <rect x="96" y="-28" width="8" height="56" rx="4"/><rect x="112" y="-16" width="8" height="32" rx="4"/>
+              <rect x="128" y="-8" width="8" height="16" rx="4"/><rect x="144" y="-20" width="8" height="40" rx="4"/>
+              <rect x="160" y="-12" width="8" height="24" rx="4"/><rect x="176" y="-6" width="8" height="12" rx="4"/>
+            </g>
+            <g transform="translate(300 282)">
+              <circle r="30" fill="url(#hg)"/>
+              <path d="M-8 -14v28l22-14z" fill="#fff"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <details class="gen" id="gen">
+        <summary><span data-icon="sparkles"></span> No deck yet? Generate one from an idea <small class="muted">(uses Presenton)</small></summary>
+        <div class="gen-body">
+          <p class="muted" id="gen-note"></p>
+          <label class="field">What is the presentation about?
+            <textarea id="gen-prompt" rows="3" placeholder="e.g. An introduction to our Q4 product roadmap for the sales team"></textarea>
+          </label>
+          <div class="grid3">
+            <label class="field">Slides <input type="number" id="gen-n" min="1" max="50" placeholder="auto"></label>
+            <label class="field">Tone
+              <select id="gen-tone">
+                <option>default</option><option>professional</option><option>casual</option>
+                <option>educational</option><option>sales_pitch</option><option>funny</option>
+              </select>
+            </label>
+            <label class="field">Template <input type="text" id="gen-template" value="general"></label>
+          </div>
+          <button class="btn primary" id="gen-go" type="button"><span data-icon="sparkles"></span>Generate deck</button>
+        </div>
+      </details>
+
+      <section class="how" aria-labelledby="how-h">
+        <h2 id="how-h">How it works</h2>
+        <ol class="how-grid">
+          <li><span class="how-n">1</span><span class="how-ico" data-icon="deck" data-size="22"></span><h3>Bring a deck</h3><p>Upload a PowerPoint, or generate one from a prompt. Hidden slides are skipped.</p></li>
+          <li><span class="how-n">2</span><span class="how-ico" data-icon="edit" data-size="22"></span><h3>Write the script</h3><p>Edit each slide's notes. Let a local AI draft the empty ones, and hear any slide before you commit.</p></li>
+          <li><span class="how-n">3</span><span class="how-ico" data-icon="film" data-size="22"></span><h3>Export</h3><p>Pick a voice and speed. Download an MP4, subtitles, per-slide audio, or the deck with its notes filled in.</p></li>
+        </ol>
+      </section>
+
+      <section class="recent" id="recent" hidden aria-labelledby="recent-h">
+        <h2 id="recent-h">Your recent decks</h2>
+        <ul class="recent-grid" id="recent-grid"></ul>
+      </section>
+    </section>
+
+    <!-- ============ SCRIPT / EXPORT (built by app.js) ============ -->
+    <section id="view-script" class="view" hidden></section>
+    <section id="view-export" class="view" hidden></section>
+  </main>
+
+  <footer class="foot">
+    <span>Narrated Slides <span id="app-version"></span></span>
+    <span class="sep">·</span>
+    <span>Your files stay on this computer.</span>
+  </footer>
+
+  <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- Services dialog -->
+  <dialog id="dlg-status" aria-labelledby="dlg-status-h">
+    <form method="dialog" class="dlg-head"><h2 id="dlg-status-h">Services</h2><button class="icon-btn" aria-label="Close" data-icon="x"></button></form>
+    <div class="dlg-body" id="status-body"></div>
+  </dialog>
+
+  <!-- Help dialog -->
+  <dialog id="dlg-help" aria-labelledby="dlg-help-h">
+    <form method="dialog" class="dlg-head"><h2 id="dlg-help-h">Quick guide</h2><button class="icon-btn" aria-label="Close" data-icon="x"></button></form>
+    <div class="dlg-body">
+      <ol class="guide">
+        <li><strong>Add a deck.</strong> Drop a <code>.pptx</code> on the home page, or press <em>Try the sample deck</em>.</li>
+        <li><strong>Write the script.</strong> Whatever is in a slide's speaker notes is what gets spoken. Edit it in the box under the slide. Changes save automatically.</li>
+        <li><strong>Hear it.</strong> <em>Preview voice</em> plays the current slide's notes. Slides with no notes stay silent for a few seconds.</li>
+        <li><strong>Export.</strong> Choose a voice and speed, then <em>Create narrated video</em>. Download the MP4 when it finishes.</li>
+        <li><strong>Want to change a slide's design?</strong> Edit the deck in PowerPoint or Keynote, upload it again, and your video is rebuilt in minutes. <em>Deck with notes</em> in the export step gives you the file with your final notes inside.</li>
+      </ol>
+      <h3>Keyboard shortcuts</h3>
+      <dl class="keys">
+        <dt><kbd>Alt</kbd> + <kbd>↑</kbd> / <kbd>↓</kbd></dt><dd>Previous / next slide</dd>
+        <dt><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd></dt><dd>Preview the voice for this slide</dd>
+      </dl>
+      <p class="muted">Full documentation is in the project's <code>docs/</code> folder.</p>
+    </div>
+  </dialog>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

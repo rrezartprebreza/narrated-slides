@@ -1,0 +1,300 @@
+"""End-to-end test of the narrator pipeline against stand-in TTS / LLM / Presenton servers.
+
+Needs ffmpeg, poppler-utils and LibreOffice on the machine (they are in the Docker image):
+    pip install -r requirements.txt pytest
+    pytest tests -q
+Set TEST_SOFFICE_CMD if LibreOffice is not started with plain `soffice`.
+"""
+import io
+import os
+import socket
+import subprocess
+import threading
+import time
+import zipfile
+from pathlib import Path
+
+import pytest
+import uvicorn
+from fastapi import FastAPI, Request, Response
+from fastapi.testclient import TestClient
+from pptx import Presentation
+
+from app import config, video
+
+
+# ---------- helpers ----------
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _serve(app: FastAPI) -> str:
+    port = _free_port()
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    threading.Thread(target=server.run, daemon=True).start()
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+    return f"http://127.0.0.1:{port}"
+
+
+def make_deck(path: Path) -> Path:
+    """5 slides: notes / notes / none / HIDDEN with notes / notes."""
+    prs = Presentation()
+    texts = [
+        ("Welcome", "Why this matters", "Hello and welcome to the talk."),
+        ("The problem", "Slow reports", "Reports take hours to build by hand."),
+        ("The idea", "Automate it", ""),
+        ("Hidden backup", "Not shown", "This hidden slide must never be spoken."),
+        ("Thanks", "Questions?", "Thank you for listening."),
+    ]
+    for title, sub, note in texts:
+        slide = prs.slides.add_slide(prs.slide_layouts[0])
+        slide.shapes.title.text = title
+        slide.placeholders[1].text = sub
+        if note:
+            slide.notes_slide.notes_text_frame.text = note
+    prs.slides[3]._element.set("show", "0")
+    prs.save(str(path))
+    return path
+
+
+# ---------- stand-in servers ----------
+
+def _tts_app() -> FastAPI:
+    app = FastAPI()
+
+    @app.get("/health")
+    def health():
+        return {"status": "healthy"}
+
+    @app.get("/v1/audio/voices")
+    def voices():
+        return {"voices": ["af_heart", "am_michael"]}
+
+    @app.post("/v1/audio/speech")
+    async def speech(req: Request):
+        body = await req.json()
+        assert body["model"] == "kokoro" and body["response_format"] == "mp3"
+        seconds = max(1.0, len(body["input"]) / 14)
+        mp3 = subprocess.run(
+            ["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", f"sine=frequency=440:duration={seconds}",
+             "-f", "mp3", "-"],
+            capture_output=True, check=True,
+        ).stdout
+        return Response(mp3, media_type="audio/mpeg")
+
+    return app
+
+
+def _llm_app() -> FastAPI:
+    app = FastAPI()
+
+    @app.get("/v1/models")
+    def models():
+        return {"data": []}
+
+    @app.post("/v1/chat/completions")
+    async def chat(req: Request):
+        body = await req.json()
+        user = body["messages"][-1]["content"]
+        assert "The idea" in user  # slide content was passed through
+        return {"choices": [{"message": {"content": "Narration: **Automation** removes the manual steps."}}]}
+
+    return app
+
+
+def _presenton_app(deck_bytes: bytes) -> FastAPI:
+    app = FastAPI()
+
+    @app.get("/")
+    def root():
+        return {"ok": True}
+
+    @app.post("/api/v1/ppt/presentation/generate")
+    async def generate(req: Request):
+        body = await req.json()
+        assert body["content"] and body["export_as"] == "pptx"
+        return {"presentation_id": "abc", "path": "/app_data/exports/abc.pptx", "edit_path": "/presentation?id=abc"}
+
+    @app.get("/app_data/exports/abc.pptx")
+    def download():
+        return Response(deck_bytes, media_type="application/octet-stream")
+
+    return app
+
+
+# ---------- fixtures ----------
+
+@pytest.fixture(scope="module")
+def deck_file(tmp_path_factory) -> Path:
+    return make_deck(tmp_path_factory.mktemp("deck") / "Quarterly Review.pptx")
+
+
+@pytest.fixture(scope="module")
+def client(tmp_path_factory, deck_file):
+    mp = pytest.MonkeyPatch()
+    tts_url = _serve(_tts_app())
+    llm_url = _serve(_llm_app())
+    presenton_url = _serve(_presenton_app(deck_file.read_bytes()))
+    mp.setattr(config, "DATA_DIR", tmp_path_factory.mktemp("data"))
+    mp.setattr(config, "TTS_BASE_URL", tts_url + "/v1")
+    mp.setattr(config, "NOTES_LLM_BASE_URL", llm_url + "/v1")
+    mp.setattr(config, "NOTES_LLM_MODEL", "test-model")
+    mp.setattr(config, "PRESENTON_URL", presenton_url)
+    mp.setattr(config, "SOFFICE_CMD", os.environ.get("TEST_SOFFICE_CMD", "soffice"))
+    from app.main import app
+
+    with TestClient(app) as c:
+        yield c
+    mp.undo()
+
+
+def wait(client, job_id, timeout=300) -> dict:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("done", "error"):
+            return job
+        time.sleep(0.5)
+    raise AssertionError("job timed out")
+
+
+def upload(client, path: Path) -> str:
+    with open(path, "rb") as fh:
+        r = client.post("/api/decks", files={"file": (path.name, fh)})
+    assert r.status_code == 200, r.text
+    job = wait(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    return r.json()["deck_id"]
+
+
+# ---------- tests ----------
+
+def test_health_and_voices(client):
+    h = client.get("/api/health").json()
+    assert h["tts"] and h["llm"] and h["presenton"]
+    assert client.get("/api/voices").json()["voices"] == ["af_heart", "am_michael"]
+
+
+def test_upload_reads_visible_slides_and_notes(client, deck_file):
+    deck_id = upload(client, deck_file)
+    deck = client.get(f"/api/decks/{deck_id}").json()
+    assert deck["name"] == "Quarterly Review"
+    assert [s["title"] for s in deck["slides"]] == ["Welcome", "The problem", "The idea", "Thanks"]  # hidden skipped
+    assert [bool(s["notes"]) for s in deck["slides"]] == [True, True, False, True]
+    img = client.get(f"/api/decks/{deck_id}/slides/4.jpg")
+    assert img.status_code == 200 and img.headers["content-type"] == "image/jpeg" and len(img.content) > 2000
+
+
+def test_suggest_then_render(client, deck_file):
+    deck_id = upload(client, deck_file)
+    r = client.post(f"/api/decks/{deck_id}/suggest-notes", json={"notes": {}})
+    job = wait(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    assert list(job["result"]["notes"]) == ["3"]  # only the empty slide
+    assert job["result"]["notes"]["3"] == "Automation removes the manual steps."  # prefix + markdown stripped
+
+    notes = {"1": "Hello and welcome to the talk.", "3": job["result"]["notes"]["3"], "4": "Edited closing line."}
+    r = client.post(f"/api/decks/{deck_id}/render", json={"notes": notes, "pause": 0.5, "resolution": 720})
+    job = wait(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    names = {o["name"] for o in job["result"]["outputs"]}
+    assert names == {"narrated.mp4", "narration-audio.zip", "narration.srt", "deck-with-notes.pptx"}
+
+    out = Path(config.DATA_DIR) / "decks" / deck_id / "out"
+    # slide 2 keeps its original note, so 4 spoken slides, no silent one
+    with zipfile.ZipFile(out / "narration-audio.zip") as zf:
+        assert sorted(zf.namelist()) == ["slide-01.mp3", "slide-02.mp3", "slide-03.mp3", "slide-04.mp3"]
+    dur = video.probe_duration(out / "narrated.mp4")
+    assert dur > 4 * 1.0  # >= 1 s speech per slide
+    assert abs(dur - job["result"]["seconds"]) < 0.5
+    srt = (out / "narration.srt").read_text()
+    assert "Edited closing line." in srt and "00:00:00,000 -->" in srt
+    # edited notes were written back; the hidden slide was left alone
+    prs = Presentation(str(out / "deck-with-notes.pptx"))
+    assert prs.slides[4].notes_slide.notes_text_frame.text == "Edited closing line."
+    assert prs.slides[3].notes_slide.notes_text_frame.text == "This hidden slide must never be spoken."
+    # download endpoint
+    assert client.get(f"/api/decks/{deck_id}/files/narrated.mp4").status_code == 200
+    assert client.get(f"/api/decks/{deck_id}/files/../../state.json").status_code in (404, 422)
+
+
+def test_silent_slide_and_render_without_any_notes(client, deck_file):
+    deck_id = upload(client, deck_file)
+    empty = {str(n): "" for n in range(1, 5)}
+    r = client.post(f"/api/decks/{deck_id}/render", json={"notes": empty})
+    job = wait(client, r.json()["job_id"])
+    assert job["status"] == "error" and "No slide has narration" in job["error"]
+
+    r = client.post(f"/api/decks/{deck_id}/render",
+                    json={"notes": {**empty, "1": "Just one spoken slide."}, "silent_seconds": 2, "pause": 0, "resolution": 720})
+    job = wait(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    assert job["result"]["seconds"] >= 3 * 2 + 1  # three 2 s silent slides + one spoken
+
+
+def test_generate_through_presenton(client):
+    r = client.post("/api/decks/generate", json={"prompt": "A talk about reports", "n_slides": 5})
+    job = wait(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    deck = client.get(f"/api/decks/{r.json()['deck_id']}").json()
+    assert deck["name"] == "Generated deck" and len(deck["slides"]) == 4
+
+
+def test_bad_uploads_are_rejected_cleanly(client, tmp_path):
+    assert client.post("/api/decks", files={"file": ("x.txt", b"hi")}).status_code == 400
+    assert client.post("/api/decks", files={"file": ("x.pptx", b"not a zip")}).status_code == 400
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("hello.txt", "zip but not a deck")
+    r = client.post("/api/decks", files={"file": ("fake.pptx", buf.getvalue())})
+    job = wait(client, r.json()["job_id"])
+    assert job["status"] == "error" and "PowerPoint" in job["error"]
+    assert client.get(f"/api/decks/{r.json()['deck_id']}").status_code == 404  # failed decks are removed
+    assert client.get("/api/decks/not-an-id").status_code == 404
+
+
+def test_tts_preview(client):
+    r = client.post("/api/tts/preview", json={"text": "Testing one two three.", "speed": 1.1})
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg" and len(r.content) > 500
+
+
+def test_subtitle_splitting():
+    cues = video.split_cues("First sentence here. Second one is a little longer than the first, with a comma in it. Third.")
+    assert all(len(c) <= 120 for c in cues) and " ".join(cues).startswith("First sentence here.")
+    assert video._ts(3661.5) == "01:01:01,500"
+
+
+def test_sample_deck_list_rename_delete(client):
+    r = client.get("/sample-deck.pptx")
+    assert r.status_code == 200 and r.content[:2] == b"PK"
+
+    r = client.post("/api/decks/sample")
+    assert r.status_code == 200
+    job = wait(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    deck_id = r.json()["deck_id"]
+    deck = client.get(f"/api/decks/{deck_id}").json()
+    assert deck["name"] == "Sample deck" and len(deck["slides"]) == 5
+
+    listed = client.get("/api/decks").json()["decks"]
+    entry = next(d for d in listed if d["id"] == deck_id)
+    assert entry["slides"] == 5 and entry["rendered"] is False
+
+    assert client.patch(f"/api/decks/{deck_id}", json={"name": "  My talk "}).json()["name"] == "My talk"
+    assert client.patch(f"/api/decks/{deck_id}", json={"name": ""}).status_code == 422
+    assert client.get(f"/api/decks/{deck_id}").json()["name"] == "My talk"
+
+    assert client.delete(f"/api/decks/{deck_id}").json() == {"ok": True}
+    assert client.get(f"/api/decks/{deck_id}").status_code == 404
+    assert client.delete(f"/api/decks/{deck_id}").status_code == 404
+    assert all(d["id"] != deck_id for d in client.get("/api/decks").json()["decks"])
+
+
+def test_health_reports_version(client):
+    assert client.get("/api/health").json()["version"]

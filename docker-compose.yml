@@ -1,0 +1,83 @@
+# Narrated Slides: make slides (Presenton), voice them (Kokoro), get a narrated video.
+#
+#   cp .env.example .env
+#   docker compose up -d --build                      # slides + voice + the narrator app
+#   docker compose --profile ollama up -d --build     # ...plus a local LLM (Ollama)
+#
+# Narrator app: http://localhost:8000     Presenton: http://localhost:5001
+name: narrated-slides
+
+services:
+  narrator:
+    build: ./narrator
+    image: narrated-slides/narrator:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${NARRATOR_PORT:-8000}:8000"
+    environment:
+      # Voice: any OpenAI-compatible /audio/speech endpoint works here
+      TTS_BASE_URL: http://kokoro:8880/v1
+      TTS_MODEL: kokoro
+      TTS_VOICE: ${TTS_VOICE:-af_heart}
+      # Optional: model that writes missing speaker notes (OpenAI-compatible chat API)
+      NOTES_LLM_BASE_URL: ${NOTES_LLM_BASE_URL:-http://ollama:11434/v1}
+      NOTES_LLM_MODEL: ${NOTES_LLM_MODEL:-llama3.2:3b}
+      NOTES_LLM_API_KEY: ${NOTES_LLM_API_KEY:-not-needed}
+      # Optional: lets the narrator app generate decks through Presenton's API
+      PRESENTON_URL: http://presenton:80
+      PRESENTON_PUBLIC_URL: http://localhost:${PRESENTON_PORT:-5001}
+      PRESENTON_API_KEY: ${PRESENTON_API_KEY:-}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
+      RETENTION_DAYS: ${RETENTION_DAYS:-7}
+    volumes:
+      - narrator_data:/data
+    depends_on:
+      - kokoro
+
+  kokoro:
+    # CPU build. For an NVIDIA GPU use ghcr.io/remsky/kokoro-fastapi-gpu and the `deploy` block below.
+    # Pin KOKORO_TAG in .env to a release tag once you have a version you like.
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:${KOKORO_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${KOKORO_PORT:-8880}:8880"
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  presenton:
+    image: ghcr.io/presenton/presenton:${PRESENTON_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PRESENTON_PORT:-5001}:80"
+    volumes:
+      - ./data/presenton:/app_data
+    # Presenton reads LLM, OLLAMA_URL, OLLAMA_MODEL, OPENAI_API_KEY, IMAGE_PROVIDER ... from .env
+    env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  ollama:
+    # Optional local LLM shared by Presenton and the notes writer. Start with: --profile ollama
+    profiles: ["ollama"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  narrator_data:
+  ollama_models:

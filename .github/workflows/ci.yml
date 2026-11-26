@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: narrator/requirements-dev.txt
+      - name: System packages (same ones the Docker image installs)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg poppler-utils libreoffice-impress fonts-liberation fonts-dejavu-core
+      - run: pip install -r narrator/requirements-dev.txt
+      - name: Tests
+        working-directory: narrator
+        run: python -m pytest tests -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose file is valid
+        run: |
+          cp .env.example .env
+          docker compose config -q
+      - name: Image builds
+        run: docker build -t narrated-slides-narrator ./narrator
