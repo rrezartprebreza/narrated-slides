@@ -2,7 +2,7 @@
 
 ## v1.1.0 (2026-11-26)
 
-- Albanian (Shqip) voice through a new local Piper service, downloaded on first start.
+- Albanian (Shqip) voices (Arben, Arta, Dren, Edon) through a new local Piper service, downloaded on first start.
 - Voices grouped by language, with a voice picker on the script page too.
 - "Write with AI" writes in the slide's language.
 - Links to Presenton from the services panel, the generate panel and errors.

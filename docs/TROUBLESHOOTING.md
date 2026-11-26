@@ -38,7 +38,7 @@ docker compose ps piper
 docker compose logs piper
 ```
 
-If the download keeps failing (for example behind a company proxy), download `sq_AL-medium.onnx` and `sq_AL-medium.onnx.json`
+If the download keeps failing (for example behind a company proxy), download a voice's `.onnx` and `.onnx.json` files (for example `edon/sq_AL-edon-medium.onnx`)
 yourself and point `PIPER_VOICES` at a server you control, or copy them into the `piper_models` volume as `sq_edon.onnx` and
 `sq_edon.onnx.json`.
 

@@ -58,7 +58,7 @@ services:
     image: narrated-slides/piper:local
     restart: unless-stopped
     environment:
-      PIPER_VOICES: ${PIPER_VOICES:-sq_edon=https://huggingface.co/edonseki/folsh.ai/resolve/main/sq_AL-medium.onnx}
+      PIPER_VOICES: ${PIPER_VOICES:-sq_arben=https://huggingface.co/edonseki/folsh.ai/resolve/main/arben/sq_AL-arben-medium.onnx,sq_arta=https://huggingface.co/edonseki/folsh.ai/resolve/main/arta/sq_AL-arta-medium.onnx,sq_dren=https://huggingface.co/edonseki/folsh.ai/resolve/main/dren/sq_AL-dren-medium.onnx,sq_edon=https://huggingface.co/edonseki/folsh.ai/resolve/main/edon/sq_AL-edon-medium.onnx}
     volumes:
       - piper_models:/models
 

@@ -83,14 +83,14 @@ Kokoro-FastAPI is the default. To use something else, set these on the `narrator
 ## Albanian and other Piper voices
 
 Kokoro has no Albanian voice, so the `piper` service runs [Piper](https://github.com/OHF-Voice/piper1-gpl) with a community
-Albanian voice (`sq_edon`, by Edon Sekiraqa, from `edonseki/folsh.ai` on Hugging Face). It downloads the voice (about 60 MB) on
+Albanian voices (Arben, Arta, Dren and Edon, from `edonseki/folsh.ai` on Hugging Face). It downloads them (about 60 MB each) on
 first start into the `piper_models` volume. The app lists its voices under **Shqip (Albanian)** and routes them to Piper
 automatically.
 
 Add or replace Piper voices in `.env` (name=URL of the `.onnx` file; the `.onnx.json` must sit next to it at the same URL + `.json`):
 
 ```
-PIPER_VOICES=sq_edon=https://huggingface.co/edonseki/folsh.ai/resolve/main/sq_AL-medium.onnx,de_thorsten=https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx
+PIPER_VOICES=sq_arben=https://huggingface.co/edonseki/folsh.ai/resolve/main/arben/sq_AL-arben-medium.onnx,sq_arta=https://huggingface.co/edonseki/folsh.ai/resolve/main/arta/sq_AL-arta-medium.onnx,sq_dren=https://huggingface.co/edonseki/folsh.ai/resolve/main/dren/sq_AL-dren-medium.onnx,sq_edon=https://huggingface.co/edonseki/folsh.ai/resolve/main/edon/sq_AL-edon-medium.onnx,de_thorsten=https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx
 ```
 
 Then `docker compose up -d`. Check each voice's license before using it commercially: the Albanian voice's card says only

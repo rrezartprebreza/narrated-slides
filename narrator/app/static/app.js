@@ -226,7 +226,7 @@ async function openStatus() {
       : serviceRow("bad", "Voice (Kokoro)", "required", "Not answering. On first start it downloads its model, so give it a minute, then check its log.", "docker compose ps\ndocker compose logs kokoro"),
     ...(hl.extra_tts === null || hl.extra_tts === undefined ? [] : [hl.extra_tts
       ? serviceRow("ok", "Albanian voice (Piper)", "optional", "Ready. Pick a Shqip voice to narrate Albanian slides.")
-      : serviceRow("warn", "Albanian voice (Piper)", "optional", "Starting. On first start it downloads the Albanian voice (about 60 MB). Give it a minute, then check its log.", "docker compose logs piper")]),
+      : serviceRow("warn", "Albanian voice (Piper)", "optional", "Starting. On first start it downloads the Albanian voices (about 60 MB each). Give it a minute, then check its log.", "docker compose logs piper")]),
     !hl.llm_configured
       ? serviceRow("warn", "Notes AI", "optional", "Not set up. It drafts notes for slides that have none; everything else works without it.", "docker compose --profile ollama up -d\n# then set NOTES_LLM_BASE_URL and NOTES_LLM_MODEL in .env")
       : hl.llm

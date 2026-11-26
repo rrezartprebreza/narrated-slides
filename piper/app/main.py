@@ -17,7 +17,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-DEFAULT_VOICES = "sq_edon=https://huggingface.co/edonseki/folsh.ai/resolve/main/sq_AL-medium.onnx"
+DEFAULT_VOICES = "sq_arben=https://huggingface.co/edonseki/folsh.ai/resolve/main/arben/sq_AL-arben-medium.onnx,sq_arta=https://huggingface.co/edonseki/folsh.ai/resolve/main/arta/sq_AL-arta-medium.onnx,sq_dren=https://huggingface.co/edonseki/folsh.ai/resolve/main/dren/sq_AL-dren-medium.onnx,sq_edon=https://huggingface.co/edonseki/folsh.ai/resolve/main/edon/sq_AL-edon-medium.onnx"
 MODELS_DIR = Path(os.environ.get("MODELS_DIR", "/models"))
 MEDIA = {"mp3": "audio/mpeg", "wav": "audio/wav"}
 
@@ -71,8 +71,12 @@ class Voices:
                     self.loaded[name] = voice
                     self.errors.pop(name, None)
             except Exception as exc:  # keep going with the other voices
+                msg = f"{type(exc).__name__}: {exc}"[:300]
+                print(f"[piper] voice {name} failed: {msg}", flush=True)
                 with self.lock:
-                    self.errors[name] = f"{type(exc).__name__}: {exc}"[:300]
+                    self.errors[name] = msg
+                continue
+            print(f"[piper] voice {name} ready", flush=True)
 
     def ready(self) -> bool:
         with self.lock:
