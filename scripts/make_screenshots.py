@@ -55,6 +55,7 @@ def main() -> int:
     config.NOTES_LLM_BASE_URL = t._serve(demo_llm_app()) + "/v1"
     config.NOTES_LLM_MODEL = "demo-model"
     config.PRESENTON_URL = t._serve(t._presenton_app(deck.read_bytes()))
+    config.EXTRA_TTS_BASE_URL = t._serve(t._piper_app()) + "/v1"
     config.SOFFICE_CMD = os.environ.get("TEST_SOFFICE_CMD", "soffice")
     from app.main import app
 

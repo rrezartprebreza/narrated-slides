@@ -108,6 +108,7 @@ def health():
     return {
         "version": __version__,
         "tts": tts.healthy(),
+        "extra_tts": tts.extra_healthy(),
         "default_voice": config.TTS_VOICE,
         "llm_configured": llm.configured(),
         "llm": llm.healthy(),

@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.0 (2026-11-26)
+
+- Albanian (Shqip) voice through a new local Piper service, downloaded on first start.
+- Voices grouped by language, with a voice picker on the script page too.
+- "Write with AI" writes in the slide's language.
+- Links to Presenton from the services panel, the generate panel and errors.
+
 ## v1.0.0 (2026-11-26)
 
 First public release.

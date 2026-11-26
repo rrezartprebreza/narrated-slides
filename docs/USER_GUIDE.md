@@ -46,7 +46,8 @@ Each slide is read aloud from its **speaker notes**.
 
 Press **Voice & export** (top right, or step 3 in the header).
 
-- **Voice**: pick one and press **Hear it** for a sample line.
+- **Voice**: grouped by language. Pick one and press **Hear it** for a sample line. For Albanian decks pick a **Shqip** voice.
+  The same picker is also at the top of the script page, so **Preview voice** uses it too.
 - **Speaking speed**: 1.0× is natural. 0.9× to 1.1× is the comfortable range.
 - **Pause after each slide**: breathing room before the next slide appears.
 - **Silent slide length**: how long slides without notes stay on screen.
@@ -80,8 +81,12 @@ Everything stays on the computer running Docker. Uploaded decks and finished vid
 Slides are drawn with LibreOffice. Common fonts are included, but unusual fonts or advanced effects may differ. Check the
 preview before exporting; if it is wrong, simplify the slide or use common fonts.
 
-**Can it read slides in other languages?**
-Only if the voice engine has a voice for that language. See the README for details.
+**Can it read Albanian slides?**
+Yes. Pick a voice under **Shqip (Albanian)** (on the script page or in Voice & export) and write the notes in Albanian.
+**Write with AI** also writes in the slide's language. Spell out numbers and abbreviations the way they should sound.
+
+**Other languages?**
+Only if a voice exists for that language. Kokoro covers several; more can be added as Piper voices (see Configuration).
 
 **Do animations or transitions survive?**
 No. Each slide becomes one still picture in the video.

@@ -26,6 +26,7 @@ No account, no cloud, no per-minute fees.
 - **Hear it before you commit.** Preview the voice for any slide.
 - **Optional AI note writer** for slides that have no notes (local [Ollama](https://ollama.com) or any OpenAI-compatible API).
 - **Free voices** from [Kokoro](https://github.com/remsky/Kokoro-FastAPI), or any OpenAI-compatible text-to-speech server.
+- **Albanian (Shqip) voice** built in, through a local [Piper](https://github.com/OHF-Voice/piper1-gpl) engine. Add more Piper voices for other languages.
 - **Four downloads:** MP4 video, SRT subtitles, a ZIP of MP3s (one per slide), and your deck with the final notes written in.
 - **Private by design.** Services listen on `127.0.0.1` only; files stay in a Docker volume and are deleted after 7 days.
 - Light and dark theme, keyboard shortcuts, and a one-click sample deck to try it.
@@ -71,6 +72,8 @@ flowchart LR
     A[PPTX upload<br/>or Presenton] --> B[Narrator app]
     B -->|LibreOffice → PDF → images| C[Slide pictures]
     B -->|speaker notes| D[Kokoro TTS]
+    B -->|Albanian notes| P[Piper TTS]
+    P -->|MP3 per slide| F
     B -.->|optional: missing notes| E[Ollama / OpenAI-compatible LLM]
     C --> F[FFmpeg]
     D -->|MP3 per slide| F
@@ -95,7 +98,8 @@ More detail: [User guide](docs/USER_GUIDE.md) · [Configuration](docs/CONFIGURAT
 
 ## Good to know
 
-- **Languages.** The voice follows Kokoro's supported languages and voices (see its voice list). Check that a voice exists for your language before you plan a deck.
+- **Languages.** Kokoro covers English, Spanish, French, Italian, Portuguese, Hindi, Japanese and Chinese. Albanian comes from
+  Piper. Other languages can be added as Piper voices (see [Configuration](docs/CONFIGURATION.md#albanian-and-other-piper-voices)).
 - **Slide look.** Slides are rendered with LibreOffice, so unusual fonts or effects may look slightly different from
   PowerPoint. Slide text is not changed by the narration, so you can fix the design in PowerPoint and upload again.
 - **Speed.** Speech is generated on your CPU, so export takes a while. Try the sample deck to see how long it takes on your machine.
@@ -119,4 +123,5 @@ Built on the shoulders of [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE), except the `piper/` service, which is GPL-3.0-or-later because it uses the GPL-licensed Piper library
+(see [piper/README.md](piper/README.md)).

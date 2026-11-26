@@ -9,7 +9,8 @@ from . import config
 
 SYSTEM_PROMPT = (
     "You write spoken narration for presentation slides. "
-    "Write in plain, natural English as if a presenter is speaking to an audience. "
+    "Write in plain, natural language as if a presenter is speaking to an audience. "
+    "Always write in the same language as the slide content (for example, Albanian slides get Albanian narration). "
     "No markdown, no bullet points, no emoji, no stage directions, no slide numbers. "
     "Do not read the slide word for word; explain and connect the ideas. "
     "Write out symbols and abbreviations the way they are spoken."

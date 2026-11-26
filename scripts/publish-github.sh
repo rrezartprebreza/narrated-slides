@@ -33,7 +33,7 @@ fi
 gh repo edit "$OWNER/$REPO" --homepage "https://github.com/$OWNER/$REPO" \
   --add-topic text-to-speech --add-topic tts --add-topic powerpoint --add-topic pptx \
   --add-topic video-generation --add-topic docker --add-topic self-hosted --add-topic kokoro \
-  --add-topic presentation --add-topic accessibility --add-topic education --add-topic fastapi
+  --add-topic presentation --add-topic albanian --add-topic piper-tts --add-topic accessibility --add-topic education --add-topic fastapi
 
 # 5. Release with the demo video and sample deck attached
 if ! gh release view v1.0.0 -R "$OWNER/$REPO" >/dev/null 2>&1; then

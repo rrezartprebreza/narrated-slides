@@ -16,6 +16,11 @@ TTS_MODEL = _env("TTS_MODEL", "kokoro")
 TTS_VOICE = _env("TTS_VOICE", "af_heart")
 TTS_API_KEY = _env("TTS_API_KEY", "not-needed")
 
+# Optional second engine for voices the main one lacks (Piper with Albanian by default).
+# Voices it lists are routed to it automatically.
+EXTRA_TTS_BASE_URL = _env("EXTRA_TTS_BASE_URL", "").rstrip("/")
+EXTRA_TTS_MODEL = _env("EXTRA_TTS_MODEL", "piper")
+
 # Optional: an OpenAI-compatible chat endpoint used to write missing speaker notes
 # (Ollama exposes one at http://<host>:11434/v1)
 NOTES_LLM_BASE_URL = _env("NOTES_LLM_BASE_URL", "").rstrip("/")

@@ -91,6 +91,34 @@ def _tts_app() -> FastAPI:
     return app
 
 
+def _piper_app() -> FastAPI:
+    """Stands in for the Piper (Albanian) engine."""
+    app = FastAPI()
+    calls: list[dict] = []
+    app.state.calls = calls
+
+    @app.get("/health")
+    def health():
+        return {"status": "ready"}
+
+    @app.get("/v1/audio/voices")
+    def voices():
+        return {"voices": ["sq_edon"]}
+
+    @app.post("/v1/audio/speech")
+    async def speech(req: Request):
+        body = await req.json()
+        calls.append(body)
+        assert body["model"] == "piper" and body["voice"] == "sq_edon"
+        mp3 = subprocess.run(
+            ["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=330:duration=1.5", "-f", "mp3", "-"],
+            capture_output=True, check=True,
+        ).stdout
+        return Response(mp3, media_type="audio/mpeg")
+
+    return app
+
+
 def _llm_app() -> FastAPI:
     app = FastAPI()
 
@@ -141,15 +169,19 @@ def client(tmp_path_factory, deck_file):
     tts_url = _serve(_tts_app())
     llm_url = _serve(_llm_app())
     presenton_url = _serve(_presenton_app(deck_file.read_bytes()))
+    piper = _piper_app()
+    piper_url = _serve(piper)
     mp.setattr(config, "DATA_DIR", tmp_path_factory.mktemp("data"))
     mp.setattr(config, "TTS_BASE_URL", tts_url + "/v1")
     mp.setattr(config, "NOTES_LLM_BASE_URL", llm_url + "/v1")
     mp.setattr(config, "NOTES_LLM_MODEL", "test-model")
     mp.setattr(config, "PRESENTON_URL", presenton_url)
+    mp.setattr(config, "EXTRA_TTS_BASE_URL", piper_url + "/v1")
     mp.setattr(config, "SOFFICE_CMD", os.environ.get("TEST_SOFFICE_CMD", "soffice"))
     from app.main import app
 
     with TestClient(app) as c:
+        c.piper_calls = piper.state.calls
         yield c
     mp.undo()
 
@@ -178,7 +210,8 @@ def upload(client, path: Path) -> str:
 def test_health_and_voices(client):
     h = client.get("/api/health").json()
     assert h["tts"] and h["llm"] and h["presenton"]
-    assert client.get("/api/voices").json()["voices"] == ["af_heart", "am_michael"]
+    assert client.get("/api/voices").json()["voices"] == ["af_heart", "am_michael", "sq_edon"]
+    assert client.get("/api/health").json()["extra_tts"] is True
 
 
 def test_upload_reads_visible_slides_and_notes(client, deck_file):
@@ -298,3 +331,14 @@ def test_sample_deck_list_rename_delete(client):
 
 def test_health_reports_version(client):
     assert client.get("/api/health").json()["version"]
+
+
+def test_albanian_voice_goes_to_piper(client, deck_file):
+    before = len(client.piper_calls)
+    r = client.post("/api/tts/preview", json={"text": "Mirëdita! Si jeni sot?", "voice": "sq_edon"})
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg"
+    assert client.piper_calls[-1]["input"] == "Mirëdita! Si jeni sot?"  # ë kept intact
+    deck_id = upload(client, deck_file)
+    job = wait(client, client.post(f"/api/decks/{deck_id}/render", json={"voice": "sq_edon", "resolution": 720}).json()["job_id"])
+    assert job["status"] == "done", job
+    assert len(client.piper_calls) - before == 1 + 3  # preview + three narrated slides

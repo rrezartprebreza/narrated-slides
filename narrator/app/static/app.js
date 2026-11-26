@@ -102,6 +102,41 @@ async function runJob(jobId, onUpdate) {
   }
 }
 
+// ---------- voices ----------
+const KOKORO_LANG = { a: "English (US)", b: "English (UK)", e: "Spanish", f: "French", h: "Hindi", i: "Italian", j: "Japanese", p: "Portuguese", z: "Chinese" };
+function voiceLang(v) {
+  if (/^sq[_-]/i.test(v)) return "Shqip (Albanian)";
+  const m = /^([a-z])([fm])_/.exec(v);
+  return (m && KOKORO_LANG[m[1]]) || "Other";
+}
+function voiceLabel(v) {
+  const m = /^(?:[a-z][fm]|sq)_(.+)$/i.exec(v);
+  if (!m) return v;
+  const name = m[1].replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const g = /^[a-z]([fm])_/.exec(v);
+  return g ? `${name} (${g[1] === "f" ? "female" : "male"})` : name;
+}
+const isAlbanian = (v) => /^sq[_-]/i.test(v || "");
+function sampleLine(v) {
+  return isAlbanian(v) ? "Përshëndetje! Kështu do të tingëllojnë sllajdet tuaja me zë." : "Hello! This is how your narrated slides will sound.";
+}
+function voiceSelect(id) {
+  const st = S.settings;
+  const list = S.voices.length ? S.voices : [st.voice || S.defaultVoice || "default"];
+  const groups = new Map();
+  for (const v of list) { const l = voiceLang(v); if (!groups.has(l)) groups.set(l, []); groups.get(l).push(v); }
+  const order = [...groups.keys()].sort((a, b) => (a === "Shqip (Albanian)" ? -1 : b === "Shqip (Albanian)" ? 1 : 0));
+  const sel = h("select", { id, "aria-label": "Voice" }, order.map((lang) =>
+    h("optgroup", { label: lang }, groups.get(lang).map((v) => h("option", { value: v, selected: v === st.voice }, voiceLabel(v))))));
+  sel.addEventListener("change", () => {
+    st.voice = sel.value;
+    store.set("ns-settings", S.settings);
+    $$("select.voice-pick").forEach((o) => { if (o !== sel) o.value = sel.value; });
+  });
+  sel.classList.add("voice-pick");
+  return sel;
+}
+
 // ---------- state ----------
 const DEFAULTS = { voice: "", speed: 1, pause: 0.8, silent: 3, res: 1080 };
 const S = {
@@ -186,6 +221,9 @@ async function openStatus() {
     hl.tts
       ? serviceRow("ok", "Voice (Kokoro)", "required", `Ready. Default voice: ${hl.default_voice}.`)
       : serviceRow("bad", "Voice (Kokoro)", "required", "Not answering. On first start it downloads its model, so give it a minute, then check its log.", "docker compose ps\ndocker compose logs kokoro"),
+    ...(hl.extra_tts === null || hl.extra_tts === undefined ? [] : [hl.extra_tts
+      ? serviceRow("ok", "Albanian voice (Piper)", "optional", "Ready. Pick a Shqip voice to narrate Albanian slides.")
+      : serviceRow("warn", "Albanian voice (Piper)", "optional", "Starting. On first start it downloads the Albanian voice (about 60 MB). Give it a minute, then check its log.", "docker compose logs piper")]),
     !hl.llm_configured
       ? serviceRow("warn", "Notes AI", "optional", "Not set up. It drafts notes for slides that have none; everything else works without it.", "docker compose --profile ollama up -d\n# then set NOTES_LLM_BASE_URL and NOTES_LLM_MODEL in .env")
       : hl.llm
@@ -569,8 +607,9 @@ function renderScript() {
     h("p", { class: "hint" }, "Tip: write the way you speak. Spell out numbers and abbreviations the way they should sound. ",
       h("kbd", {}, "Alt"), "+", h("kbd", {}, "↑"), h("kbd", {}, "↓"), " changes slide."));
 
+  const scriptVoice = h("label", { class: "voice-inline" }, icon("mic"), h("span", { class: "sr-only" }, "Voice"), voiceSelect("script-voice"));
   root.replaceChildren(
-    h("div", { class: "page-head" }, E.title, E.save, h("div", { class: "head-actions" }, E.aiAll, toExport)),
+    h("div", { class: "page-head" }, E.title, E.save, h("div", { class: "head-actions" }, scriptVoice, E.aiAll, toExport)),
     h("div", { class: "editor" }, E.film, h("div", { class: "stage" }, frame, notes)));
 
   d.slides.forEach((s) => updateDot(String(s.n)));
@@ -597,12 +636,10 @@ function renderExport() {
   const st = S.settings;
   const persist = () => store.set("ns-settings", S.settings);
 
-  const voices = S.voices.length ? S.voices : [st.voice || S.defaultVoice || "default"];
-  const voiceSel = h("select", { id: "voice", "aria-label": "Voice" }, voices.map((v) => h("option", { value: v, selected: v === st.voice }, v)));
-  voiceSel.addEventListener("change", () => { st.voice = voiceSel.value; persist(); });
+  const voiceSel = voiceSelect("voice");
   const sampleLabel = "Hear it";
   const sampleBtn = h("button", { class: "btn sm", type: "button" }, icon("play"), sampleLabel);
-  sampleBtn.addEventListener("click", () => playPreview("Hello! This is how your narrated slides will sound.", sampleBtn, sampleLabel));
+  sampleBtn.addEventListener("click", () => playPreview(sampleLine(st.voice), sampleBtn, sampleLabel));
 
   const speedVal = h("span", { class: "range-val" }, `${Number(st.speed).toFixed(2).replace(/0$/, "")}×`);
   const speed = h("input", { type: "range", min: "0.7", max: "1.4", step: "0.05", value: st.speed, id: "speed" });

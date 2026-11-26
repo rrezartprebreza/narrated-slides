@@ -288,3 +288,9 @@ dialog::backdrop { background: rgba(10, 8, 18, .55); backdrop-filter: blur(3px);
 }
 
 .svc-link { margin-top: 10px; }
+
+.voice-inline { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 11px; padding: 0 4px 0 10px; color: var(--muted); }
+.voice-inline select { font: inherit; font-size: .92rem; font-weight: 600; color: var(--ink); background: transparent; border: 0; padding: 9px 4px; max-width: 210px; }
+.voice-inline select:focus { outline: none; }
+.voice-inline:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

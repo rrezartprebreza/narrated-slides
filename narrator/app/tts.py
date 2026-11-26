@@ -24,19 +24,57 @@ def _headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {config.TTS_API_KEY}"}
 
 
-def _root() -> str:
-    base = config.TTS_BASE_URL
+def _root(base: str) -> str:
     return base[: -len("/v1")] if base.endswith("/v1") else base
+
+
+def _list(base: str) -> list[str]:
+    resp = httpx.get(f"{base}/audio/voices", headers=_headers(), timeout=10)
+    resp.raise_for_status()
+    names = []
+    for item in resp.json().get("voices", []):
+        if isinstance(item, str):
+            names.append(item)
+        elif isinstance(item, dict) and (item.get("id") or item.get("name")):
+            names.append(str(item.get("id") or item.get("name")))
+    return names
+
+
+_extra_voices: set[str] = set()
+
+
+def _extra_list() -> list[str]:
+    if not config.EXTRA_TTS_BASE_URL:
+        return []
+    try:
+        names = _list(config.EXTRA_TTS_BASE_URL)
+    except Exception:
+        return sorted(_extra_voices)
+    _extra_voices.clear()
+    _extra_voices.update(names)
+    return names
+
+
+def engine_for(voice: str) -> tuple[str, str]:
+    """(base_url, model) of the engine that has this voice."""
+    if config.EXTRA_TTS_BASE_URL:
+        if voice not in _extra_voices:
+            _extra_list()
+        if voice in _extra_voices:
+            return config.EXTRA_TTS_BASE_URL, config.EXTRA_TTS_MODEL
+    return config.TTS_BASE_URL, config.TTS_MODEL
 
 
 def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "mp3") -> bytes:
     text = clean_for_speech(text)
     if not text:
         raise TTSError("Nothing to say: the text is empty.")
+    voice = voice or config.TTS_VOICE
+    base, model = engine_for(voice)
     payload = {
-        "model": config.TTS_MODEL,
+        "model": model,
         "input": text,
-        "voice": voice or config.TTS_VOICE,
+        "voice": voice,
         "response_format": fmt,
         "speed": speed,
     }
@@ -45,7 +83,7 @@ def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "
     for attempt in range(6):
         try:
             resp = httpx.post(
-                f"{config.TTS_BASE_URL}/audio/speech",
+                f"{base}/audio/speech",
                 json=payload,
                 headers=_headers(),
                 timeout=config.TTS_TIMEOUT_S,
@@ -60,34 +98,34 @@ def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "
         except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
             last = exc
         time.sleep(min(2 ** attempt, 15))
-    raise TTSError(f"Could not reach the TTS server at {config.TTS_BASE_URL}: {last}")
+    raise TTSError(f"Could not reach the TTS server at {base}: {last}")
 
 
 def voices() -> list[str]:
     try:
-        resp = httpx.get(f"{config.TTS_BASE_URL}/audio/voices", headers=_headers(), timeout=10)
-        resp.raise_for_status()
-        raw = resp.json().get("voices", [])
-        names = []
-        for item in raw:
-            if isinstance(item, str):
-                names.append(item)
-            elif isinstance(item, dict):
-                name = item.get("id") or item.get("name")
-                if name:
-                    names.append(str(name))
-        if names:
-            return sorted(names)
+        main = _list(config.TTS_BASE_URL) or list(config.DEFAULT_VOICES)
     except Exception:
-        pass
-    return list(config.DEFAULT_VOICES)
+        main = list(config.DEFAULT_VOICES)
+    extra = [v for v in _extra_list() if v not in main]
+    return sorted(main) + sorted(extra)
 
 
-def healthy() -> bool:
-    for url in (f"{_root()}/health", f"{config.TTS_BASE_URL}/audio/voices"):
+def _up(base: str) -> bool:
+    for url in (f"{_root(base)}/health", f"{base}/audio/voices"):
         try:
             if httpx.get(url, headers=_headers(), timeout=3).status_code < 500:
                 return True
         except Exception:
             continue
     return False
+
+
+def healthy() -> bool:
+    return _up(config.TTS_BASE_URL)
+
+
+def extra_healthy() -> bool | None:
+    """None when no extra engine is configured; False while it is down or still downloading voices."""
+    if not config.EXTRA_TTS_BASE_URL:
+        return None
+    return _up(config.EXTRA_TTS_BASE_URL) and bool(_extra_list())

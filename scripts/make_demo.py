@@ -27,6 +27,7 @@ def main() -> int:
     ms.config.NOTES_LLM_BASE_URL = t._serve(ms.demo_llm_app()) + "/v1"
     ms.config.NOTES_LLM_MODEL = "demo-model"
     ms.config.PRESENTON_URL = t._serve(t._presenton_app(deck.read_bytes()))
+    ms.config.EXTRA_TTS_BASE_URL = t._serve(t._piper_app()) + "/v1"
     ms.config.SOFFICE_CMD = os.environ.get("TEST_SOFFICE_CMD", "soffice")
     from app.main import app
 

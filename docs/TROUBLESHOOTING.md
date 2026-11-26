@@ -29,6 +29,19 @@ Kokoro is not answering.
 - Run `docker compose ps`. If `kokoro` is not "running", `docker compose up -d kokoro`.
 - If a new image version misbehaves, set `KOKORO_IMAGE` in `.env` to another version.
 
+## No Albanian (Shqip) voices in the list
+
+The `piper` service downloads the Albanian voice on first start. Wait a minute, then reload the page. Check:
+
+```bash
+docker compose ps piper
+docker compose logs piper
+```
+
+If the download keeps failing (for example behind a company proxy), download `sq_AL-medium.onnx` and `sq_AL-medium.onnx.json`
+yourself and point `PIPER_VOICES` at a server you control, or copy them into the `piper_models` volume as `sq_edon.onnx` and
+`sq_edon.onnx.json`.
+
 ## "Notes AI" is amber or red
 
 Amber means it is not set up, which is fine: only **Write with AI** needs it. To enable it see

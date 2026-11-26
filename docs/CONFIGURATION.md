@@ -75,6 +75,30 @@ Kokoro-FastAPI is the default. To use something else, set these on the `narrator
 | `TTS_API_KEY` | Key, if needed. |
 | `TTS_TIMEOUT_S` | Per-request timeout in seconds (default 300). |
 
+## Albanian and other Piper voices
+
+Kokoro has no Albanian voice, so the `piper` service runs [Piper](https://github.com/OHF-Voice/piper1-gpl) with a community
+Albanian voice (`sq_edon`, by Edon Sekiraqa, from `edonseki/folsh.ai` on Hugging Face). It downloads the voice (about 60 MB) on
+first start into the `piper_models` volume. The app lists its voices under **Shqip (Albanian)** and routes them to Piper
+automatically.
+
+Add or replace Piper voices in `.env` (name=URL of the `.onnx` file; the `.onnx.json` must sit next to it at the same URL + `.json`):
+
+```
+PIPER_VOICES=sq_edon=https://huggingface.co/edonseki/folsh.ai/resolve/main/sq_AL-medium.onnx,de_thorsten=https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx
+```
+
+Then `docker compose up -d`. Check each voice's license before using it commercially: the Albanian voice's card says only
+"Creative Commons" without naming the variant.
+
+To turn the extra engine off, remove `EXTRA_TTS_BASE_URL` from the `narrator` service and the `piper` service from `docker-compose.yml`.
+
+| Variable | Where | Meaning |
+|---|---|---|
+| `EXTRA_TTS_BASE_URL` | narrator | Second OpenAI-compatible TTS server. Its voices are routed to it. |
+| `EXTRA_TTS_MODEL` | narrator | Model name sent to it (default `piper`). |
+| `PIPER_VOICES` | piper | Voices to download and serve. |
+
 ## GPU (Linux or Windows with NVIDIA)
 
 In `docker-compose.yml`, switch the Kokoro image to `ghcr.io/remsky/kokoro-fastapi-gpu` and uncomment its `deploy` block

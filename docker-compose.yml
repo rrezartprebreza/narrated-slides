@@ -19,6 +19,8 @@ services:
       TTS_BASE_URL: http://kokoro:8880/v1
       TTS_MODEL: kokoro
       TTS_VOICE: ${TTS_VOICE:-af_heart}
+      # Second voice engine (Piper) for languages Kokoro lacks; Albanian by default
+      EXTRA_TTS_BASE_URL: http://piper:8000/v1
       # Optional: model that writes missing speaker notes (OpenAI-compatible chat API)
       NOTES_LLM_BASE_URL: ${NOTES_LLM_BASE_URL:-http://ollama:11434/v1}
       NOTES_LLM_MODEL: ${NOTES_LLM_MODEL:-llama3.2:3b}
@@ -48,6 +50,17 @@ services:
     #         - driver: nvidia
     #           count: all
     #           capabilities: [gpu]
+
+  piper:
+    # Local Piper TTS with an Albanian voice. Downloads the voice (~60 MB) on first start.
+    # Add more Piper voices with PIPER_VOICES in .env (name=URL-of-model.onnx, comma separated).
+    build: ./piper
+    image: narrated-slides/piper:local
+    restart: unless-stopped
+    environment:
+      PIPER_VOICES: ${PIPER_VOICES:-sq_edon=https://huggingface.co/edonseki/folsh.ai/resolve/main/sq_AL-medium.onnx}
+    volumes:
+      - piper_models:/models
 
   presenton:
     image: ${PRESENTON_IMAGE:-ghcr.io/presenton/presenton@sha256:dd444e4384df0caeb7cb96a26bfa7543a12d2be19c83d661446b2087d09aed54}
@@ -83,3 +96,4 @@ services:
 volumes:
   narrator_data:
   ollama_models:
+  piper_models:
