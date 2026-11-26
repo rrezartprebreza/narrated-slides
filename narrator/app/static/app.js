@@ -184,7 +184,10 @@ async function refreshHealth() {
     : hl.presenton_api_key
       ? ["Presenton writes the slides, then you add the narration as usual. This can take a few minutes. You can also design a deck in ", link, ", export it as PPTX and upload it here."]
       : ["Generating from here needs a Presenton API key (PRESENTON_API_KEY in .env). ", link, " to create one, or design the deck there, export PPTX and upload it here."]));
-  if (!S.voices.length && hl.tts) loadVoices();
+  if (hl.tts && (!S.voices.length || (hl.extra_tts && !S.voices.some(isAlbanian)))) loadVoices().then(refreshVoicePickers);
+}
+function refreshVoicePickers() {
+  $$("select.voice-pick").forEach((old) => old.replaceWith(voiceSelect(old.id)));
 }
 async function loadVoices() {
   try {
