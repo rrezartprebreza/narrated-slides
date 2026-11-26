@@ -143,9 +143,12 @@ async function refreshHealth() {
   $("#app-version").textContent = hl.version ? "v" + hl.version : "";
   const gen = $("#gen-go");
   gen.disabled = !hl.presenton;
-  $("#gen-note").textContent = hl.presenton
-    ? "Presenton writes the slides, then you add the narration as usual. This can take a few minutes."
-    : "Presenton isn't reachable, so deck generation is unavailable. Uploading a deck still works. See Services (top right).";
+  const link = h("a", { href: hl.presenton_url || "http://localhost:5001", target: "_blank", rel: "noopener" }, "Open Presenton");
+  $("#gen-note").replaceChildren(...(!hl.presenton
+    ? ["Presenton isn't reachable, so deck generation is unavailable. Uploading a deck still works. See Services (top right)."]
+    : hl.presenton_api_key
+      ? ["Presenton writes the slides, then you add the narration as usual. This can take a few minutes. You can also design a deck in ", link, ", export it as PPTX and upload it here."]
+      : ["Generating from here needs a Presenton API key (PRESENTON_API_KEY in .env). ", link, " to create one, or design the deck there, export PPTX and upload it here."]));
   if (!S.voices.length && hl.tts) loadVoices();
 }
 async function loadVoices() {
@@ -156,13 +159,17 @@ async function loadVoices() {
   } catch { /* shown by the status pill */ }
 }
 
-function serviceRow(level, name, tag, msg, cmd) {
+function serviceRow(level, name, tag, msg, cmd, link) {
   return h("div", { class: "svc" },
     h("span", { class: `dot ${level}` }),
     h("div", {},
       h("h3", {}, name, tag ? h("span", { class: "tag" }, tag) : null),
       h("p", {}, msg),
-      cmd ? h("pre", {}, cmd) : null));
+      cmd ? h("pre", {}, cmd) : null,
+      link ? h("a", { class: "btn sm svc-link", href: link.href, target: "_blank", rel: "noopener" }, link.label, icon("right")) : null));
+}
+function presentonLink(label = "Open Presenton") {
+  return { href: S.health?.presenton_url || "http://localhost:5001", label };
 }
 async function openStatus() {
   const dlg = $("#dlg-status");
@@ -187,8 +194,9 @@ async function openStatus() {
     hl.presenton
       ? serviceRow(hl.presenton_api_key ? "ok" : "warn", "Presenton", "optional", hl.presenton_api_key
         ? "Ready. You can generate decks from a prompt."
-        : "Running, but PRESENTON_API_KEY isn't set, so generating from the app may be refused. See docs/CONFIGURATION.md.")
-      : serviceRow("warn", "Presenton", "optional", "Not reachable. Only needed to generate decks from a prompt. Uploading your own deck works without it.", "docker compose up -d presenton"),
+        : "Running, but PRESENTON_API_KEY isn't set, so generating from the app will be refused. Open Presenton, create an API key in its settings, add it to .env as PRESENTON_API_KEY=..., then run: docker compose up -d",
+        null, presentonLink(hl.presenton_api_key ? "Open Presenton" : "Open Presenton to create a key"))
+      : serviceRow("warn", "Presenton", "optional", "Not reachable. Only needed to generate decks from a prompt. Uploading your own deck works without it.", "docker compose up -d presenton", presentonLink()),
   );
 }
 $("#btn-status").addEventListener("click", openStatus);
@@ -265,7 +273,14 @@ function busyProgress(frac, step) {
   $("#busy-pct").textContent = Math.round(frac * 100) + "%";
   if (step) $("#busy-step").textContent = step;
 }
-function showHomeError(msg) { const e = $("#home-error"); e.textContent = msg || ""; e.hidden = !msg; }
+function showHomeError(msg) {
+  const e = $("#home-error");
+  e.replaceChildren(msg || "");
+  if (msg && /presenton/i.test(msg)) {
+    e.append(" ", h("a", { href: S.health?.presenton_url || "http://localhost:5001", target: "_blank", rel: "noopener" }, "Open Presenton"));
+  }
+  e.hidden = !msg;
+}
 
 function uploadFile(file, onProgress) {
   return new Promise((resolve, reject) => {
