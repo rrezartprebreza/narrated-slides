@@ -27,7 +27,7 @@ Kokoro is not answering.
 
 - On the very first start it downloads its model. Wait a minute or two and look at `docker compose logs kokoro`.
 - Run `docker compose ps`. If `kokoro` is not "running", `docker compose up -d kokoro`.
-- If a new image version misbehaves, pin an earlier one with `KOKORO_TAG` in `.env`.
+- If a new image version misbehaves, set `KOKORO_IMAGE` in `.env` to another version.
 
 ## "Notes AI" is amber or red
 

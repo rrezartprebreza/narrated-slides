@@ -36,8 +36,8 @@ services:
 
   kokoro:
     # CPU build. For an NVIDIA GPU use ghcr.io/remsky/kokoro-fastapi-gpu and the `deploy` block below.
-    # Pin KOKORO_TAG in .env to a release tag once you have a version you like.
-    image: ghcr.io/remsky/kokoro-fastapi-cpu:${KOKORO_TAG:-latest}
+    # Pinned to a tested version by scripts/pin-images.sh. Override with KOKORO_IMAGE in .env.
+    image: ${KOKORO_IMAGE:-ghcr.io/remsky/kokoro-fastapi-cpu:latest}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${KOKORO_PORT:-8880}:8880"
@@ -50,14 +50,16 @@ services:
     #           capabilities: [gpu]
 
   presenton:
-    image: ghcr.io/presenton/presenton:${PRESENTON_TAG:-latest}
+    image: ${PRESENTON_IMAGE:-ghcr.io/presenton/presenton:latest}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${PRESENTON_PORT:-5001}:80"
     volumes:
       - ./data/presenton:/app_data
     # Presenton reads LLM, OLLAMA_URL, OLLAMA_MODEL, OPENAI_API_KEY, IMAGE_PROVIDER ... from .env
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false   # compose still starts if you skipped `cp .env.example .env`
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

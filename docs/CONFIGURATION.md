@@ -13,7 +13,7 @@ pick the new values up.
 | `TTS_VOICE` | `af_heart` | Default voice. Users can change it in the app. |
 | `MAX_UPLOAD_MB` | `100` | Largest `.pptx` accepted. |
 | `RETENTION_DAYS` | `7` | Decks and videos older than this are deleted at startup. `0` keeps everything. |
-| `KOKORO_TAG`, `PRESENTON_TAG` | `latest` | Pin to a release tag once you have a version you like. |
+| `KOKORO_IMAGE`, `PRESENTON_IMAGE` | tested version | Use a different image version. The defaults in `docker-compose.yml` are pinned to versions known to work. |
 
 All ports are published on `127.0.0.1` only. To let other computers on your network use the app, change the `ports`
 entry in `docker-compose.yml` to `"8000:8000"`. There is no login, so only do this on a network you trust.

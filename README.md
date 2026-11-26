@@ -1,12 +1,23 @@
 # Narrated Slides
 
+[![CI](https://github.com/rrezartprebreza/narrated-slides/actions/workflows/ci.yml/badge.svg)](https://github.com/rrezartprebreza/narrated-slides/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Docker](https://img.shields.io/badge/runs%20with-Docker-2496ED?logo=docker&logoColor=white)
+![Self-hosted](https://img.shields.io/badge/self--hosted-100%25%20local-6d4aff)
+
 **Turn a PowerPoint deck into a narrated MP4 video.** Your speaker notes are read aloud by a natural-sounding AI voice,
 and you get the video, subtitles, per-slide audio and an updated deck. Everything runs on your own computer with Docker.
 No account, no cloud, no per-minute fees.
 
 <p align="center">
-  <img src="docs/images/01-home.png" alt="Narrated Slides home screen" width="860">
+  <img src="docs/images/demo.gif" alt="Demo: open the sample deck, edit the script, export a narrated video" width="860">
 </p>
+
+## Who is it for?
+
+- **Teachers and lecturers** turning lecture slides into videos with captions for students.
+- **Teams** sharing onboarding, training or product updates people can watch any time.
+- **Anyone** who wants the same clear delivery every time, without recording their own voice.
 
 ## Features
 
@@ -20,7 +31,11 @@ No account, no cloud, no per-minute fees.
 - Light and dark theme, keyboard shortcuts, and a one-click sample deck to try it.
 
 <p align="center">
+  <img src="docs/images/01-home.png" alt="Home screen" width="49%">
   <img src="docs/images/02-script.png" alt="Script editor" width="49%">
+</p>
+<p align="center">
+  <img src="docs/images/06-home-dark.png" alt="Dark theme" width="49%">
   <img src="docs/images/04-result.png" alt="Finished video and downloads" width="49%">
 </p>
 
@@ -29,7 +44,7 @@ No account, no cloud, no per-minute fees.
 You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine with the Compose plugin).
 
 ```bash
-git clone https://github.com/<your-user>/narrated-slides.git
+git clone https://github.com/rrezartprebreza/narrated-slides.git
 cd narrated-slides
 cp .env.example .env
 docker compose up -d --build
@@ -92,7 +107,7 @@ More detail: [User guide](docs/USER_GUIDE.md) · [Configuration](docs/CONFIGURAT
 narrator/          the web app (FastAPI + plain HTML/CSS/JS) and its tests
 docker-compose.yml narrator + Kokoro + Presenton (+ optional Ollama)
 docs/              guides and screenshots
-scripts/           screenshot generator
+scripts/           screenshots, demo GIF, image pinning, GitHub publish
 ```
 
 ## Credits
