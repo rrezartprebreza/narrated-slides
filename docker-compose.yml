@@ -37,7 +37,7 @@ services:
   kokoro:
     # CPU build. For an NVIDIA GPU use ghcr.io/remsky/kokoro-fastapi-gpu and the `deploy` block below.
     # Pinned to a tested version by scripts/pin-images.sh. Override with KOKORO_IMAGE in .env.
-    image: ${KOKORO_IMAGE:-ghcr.io/remsky/kokoro-fastapi-cpu:latest}
+    image: ${KOKORO_IMAGE:-ghcr.io/remsky/kokoro-fastapi-cpu@sha256:f54c5960c2b9387f6349080a9944f8bc7e8cdb98a4ef9238cb0b0f9ff9795f44}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${KOKORO_PORT:-8880}:8880"
@@ -50,7 +50,7 @@ services:
     #           capabilities: [gpu]
 
   presenton:
-    image: ${PRESENTON_IMAGE:-ghcr.io/presenton/presenton:latest}
+    image: ${PRESENTON_IMAGE:-ghcr.io/presenton/presenton@sha256:dd444e4384df0caeb7cb96a26bfa7543a12d2be19c83d661446b2087d09aed54}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${PRESENTON_PORT:-5001}:80"
