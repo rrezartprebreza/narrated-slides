@@ -64,7 +64,8 @@ def generate_deck(deck_id: str, job: Job, req: dict) -> dict:
     return prepare_deck(deck_id, job, name="Generated deck")
 
 
-def suggest_notes(deck_id: str, job: Job, current: dict[str, str], only: list[int] | None, sentences: int) -> dict:
+def suggest_notes(deck_id: str, job: Job, current: dict[str, str], only: list[int] | None, sentences: int,
+                  language: str | None = None) -> dict:
     state = store.load(deck_id)
     slides = state["slides"]
     targets = []
@@ -82,7 +83,7 @@ def suggest_notes(deck_id: str, job: Job, current: dict[str, str], only: list[in
     for i, s in enumerate(targets):
         job.update(f"Writing notes for slide {s['n']} ({i + 1} of {len(targets)})…", i / len(targets))
         try:
-            notes[str(s["n"])] = llm.write_notes(state["name"], s, len(slides), sentences)
+            notes[str(s["n"])] = llm.write_notes(state["name"], s, len(slides), sentences, language)
         except Exception as exc:
             errors[str(s["n"])] = str(exc)[:200]
     if not notes:

@@ -44,6 +44,11 @@ NOTES_LLM_API_KEY=sk-...
 
 Slide text is sent to the model you choose. With a hosted API that means it leaves your computer.
 
+**Albanian notes.** When a Shqip voice is selected, **Write with AI** asks the model to write in Albanian. Small local
+models such as `llama3.2:3b` write weak Albanian. A larger multilingual model (for example `gemma3:12b` or `qwen2.5:7b` in
+Ollama, if your computer has the memory) or a hosted model such as `gpt-4.1-mini` usually does much better. Always read
+the draft before exporting.
+
 ## Slide generation with Presenton (optional)
 
 Presenton reads its own settings from `.env`:

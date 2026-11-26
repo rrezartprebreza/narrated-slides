@@ -534,7 +534,7 @@ async function runAi(slideNums) {
   S.aiBusy = true;
   [E.aiAll, E.aiOne].forEach((b) => (b.disabled = true));
   try {
-    const { job_id } = await sendJSON(`/api/decks/${S.deck.id}/suggest-notes`, "POST", { notes: S.notes, slides: slideNums });
+    const { job_id } = await sendJSON(`/api/decks/${S.deck.id}/suggest-notes`, "POST", { notes: S.notes, slides: slideNums, language: isAlbanian(S.settings.voice) ? "Albanian" : null });
     const res = await runJob(job_id, (j) => setSaveState(j.step));
     const written = Object.entries(res.notes || {});
     for (const [n, text] of written) { S.notes[n] = text; updateDot(n); }

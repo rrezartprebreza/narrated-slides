@@ -44,7 +44,7 @@ def _tidy(text: str) -> str:
     return re.sub(r"\s*\n+\s*", " ", text)
 
 
-def write_notes(deck_title: str, slide: dict, total: int, sentences: int = 3) -> str:
+def write_notes(deck_title: str, slide: dict, total: int, sentences: int = 3, language: str | None = None) -> str:
     if not configured():
         raise RuntimeError("No notes LLM is configured (set NOTES_LLM_BASE_URL and NOTES_LLM_MODEL).")
     content = slide["title"] or "(no title)"
@@ -56,6 +56,9 @@ def write_notes(deck_title: str, slide: dict, total: int, sentences: int = 3) ->
         f"Slide content:\n{content}\n\n"
         f"Write the narration for this slide in {sentences} to {sentences + 1} sentences."
     )
+    if language:
+        user += (f" Write it in {language}, even if the slide is in another language. "
+                 f"Use correct {language} spelling and letters, and write numbers out as words.")
     resp = httpx.post(
         f"{config.NOTES_LLM_BASE_URL}/chat/completions",
         json={

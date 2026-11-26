@@ -342,3 +342,15 @@ def test_albanian_voice_goes_to_piper(client, deck_file):
     job = wait(client, client.post(f"/api/decks/{deck_id}/render", json={"voice": "sq_edon", "resolution": 720}).json()["job_id"])
     assert job["status"] == "done", job
     assert len(client.piper_calls) - before == 1 + 3  # preview + three narrated slides
+
+
+def test_notes_language_follows_albanian_voice(client, deck_file, monkeypatch):
+    from app import llm
+    seen = []
+    monkeypatch.setattr(llm.httpx, "post", lambda url, json, **kw: (seen.append(json["messages"][-1]["content"]),
+                        type("R", (), {"raise_for_status": lambda self: None,
+                                       "json": lambda self: {"choices": [{"message": {"content": "Mirëdita të gjithëve."}}]}})())[1])
+    deck_id = upload(client, deck_file)
+    job = wait(client, client.post(f"/api/decks/{deck_id}/suggest-notes", json={"slides": [3], "language": "Albanian"}).json()["job_id"])
+    assert job["status"] == "done" and job["result"]["notes"]["3"] == "Mirëdita të gjithëve."
+    assert "Write it in Albanian" in seen[-1]

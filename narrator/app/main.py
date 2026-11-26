@@ -59,6 +59,7 @@ class SuggestRequest(BaseModel):
     notes: dict[str, str] = {}  # current text in the UI, so filled slides are left alone
     slides: list[int] | None = None  # explicit slide numbers; None = every empty slide
     sentences: int = Field(3, ge=1, le=8)
+    language: str | None = Field(None, max_length=40)  # e.g. "Albanian"; None = same language as the slide
 
 
 class RenderRequest(BaseModel):
@@ -227,7 +228,7 @@ def suggest_notes(deck_id: str, req: SuggestRequest):
     if not llm.configured():
         raise HTTPException(400, "No notes model is configured. Set NOTES_LLM_BASE_URL and NOTES_LLM_MODEL (see README).")
     notes = _check_notes(req.notes)
-    job = manager.submit("notes", lambda j: pipeline.suggest_notes(deck_id, j, notes, req.slides, req.sentences))
+    job = manager.submit("notes", lambda j: pipeline.suggest_notes(deck_id, j, notes, req.slides, req.sentences, req.language))
     return {"job_id": job.id}
 
 
