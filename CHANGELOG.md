@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.0 (2026-11-27)
+
+- Subtitles in English, Albanian, Italian, Portuguese, Norwegian and Turkish: translated by the notes AI, embedded as
+  selectable tracks in the MP4, and downloadable as SRT files (ZIP). The in-page player shows every track.
+
 ## v1.1.0 (2026-11-26)
 
 - Albanian (Shqip) voices (Arben, Arta, Dren, Edon) through a new local Piper service, downloaded on first start.

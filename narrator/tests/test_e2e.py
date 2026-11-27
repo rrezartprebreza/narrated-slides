@@ -130,6 +130,11 @@ def _llm_app() -> FastAPI:
     async def chat(req: Request):
         body = await req.json()
         user = body["messages"][-1]["content"]
+        if user.startswith("Translate"):  # subtitle translation: answer a JSON array, one item per line
+            import json as _json
+            lang = user.split(" into ", 1)[1].split(":", 1)[0]
+            lines = _json.loads(user.split("\n", 1)[1])
+            return {"choices": [{"message": {"content": "```json\n" + _json.dumps([f"[{lang}] {x}" for x in lines]) + "\n```"}}]}
         assert "The idea" in user  # slide content was passed through
         return {"choices": [{"message": {"content": "Narration: **Automation** removes the manual steps."}}]}
 
@@ -354,3 +359,50 @@ def test_notes_language_follows_albanian_voice(client, deck_file, monkeypatch):
     job = wait(client, client.post(f"/api/decks/{deck_id}/suggest-notes", json={"slides": [3], "language": "Albanian"}).json()["job_id"])
     assert job["status"] == "done" and job["result"]["notes"]["3"] == "Mirëdita të gjithëve."
     assert "Write it in Albanian" in seen[-1]
+
+
+def test_subtitles_in_several_languages(client, deck_file):
+    deck_id = upload(client, deck_file)
+    r = client.post(f"/api/decks/{deck_id}/render",
+                    json={"voice": "af_heart", "resolution": 720, "subtitle_languages": ["sq", "en", "tr"]})
+    job = wait(client, r.json()["job_id"])
+    assert job["status"] == "done", job
+    assert job["result"]["warnings"] == []
+    names = {o["name"] for o in job["result"]["outputs"]}
+    assert {"narration.srt", "narration.sq.srt", "narration.en.srt", "narration.tr.srt", "narration-subtitles.zip"} <= names
+
+    original = client.get(f"/api/decks/{deck_id}/files/narration.srt").text
+    sq = client.get(f"/api/decks/{deck_id}/files/narration.sq.srt").text
+    en = client.get(f"/api/decks/{deck_id}/files/narration.en.srt").text
+    assert en == original                       # English voice: English track is the original, not re-translated
+    assert "[Albanian] " in sq and sq.count("-->") == original.count("-->")  # same timings
+    assert "[Turkish] " in client.get(f"/api/decks/{deck_id}/files/narration.tr.srt").text
+
+    vtt = client.get(f"/api/decks/{deck_id}/files/narration.sq.srt?vtt=1")
+    assert vtt.text.startswith("WEBVTT") and "00:00:00.000 -->" in vtt.text
+
+    mp4 = client.get(f"/api/decks/{deck_id}/files/narrated.mp4").content
+    tmp = deck_file.parent / "subs.mp4"
+    tmp.write_bytes(mp4)
+    langs = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "s", "-show_entries", "stream_tags=language",
+                            "-of", "csv=p=0", str(tmp)], capture_output=True, text=True, check=True).stdout.split()
+    assert langs == ["sqi", "eng", "tur"]
+
+
+def test_subtitle_languages_need_llm(client, deck_file, monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "NOTES_LLM_BASE_URL", "")
+    deck_id = upload(client, deck_file)
+    job = wait(client, client.post(f"/api/decks/{deck_id}/render", json={"voice": "af_heart", "subtitle_languages": ["it"]}).json()["job_id"])
+    assert job["status"] == "error" and "notes AI" in job["error"]
+    # the narration's own language needs no AI
+    job = wait(client, client.post(f"/api/decks/{deck_id}/render",
+                                   json={"voice": "af_heart", "resolution": 720, "subtitle_languages": ["en"]}).json()["job_id"])
+    assert job["status"] == "done", job
+
+
+def test_parse_translation_array():
+    from app import llm
+    assert llm._parse_array('Sure! ```json\n["a", "b"]\n```', 2) == ["a", "b"]
+    assert llm._parse_array('["a"]', 2) is None
+    assert llm._parse_array("no json here", 1) is None

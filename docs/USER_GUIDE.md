@@ -52,6 +52,10 @@ Press **Voice & export** (top right, or step 3 in the header).
 - **Pause after each slide**: breathing room before the next slide appears.
 - **Silent slide length**: how long slides without notes stay on screen.
 - **Video size**: 1080p for sharing, 720p for smaller files and faster exports.
+- **Subtitles**: tick any of English, Shqip, Italiano, Português, Norsk and Türkçe. The narration's own language (marked
+  *original*) is always included. The other languages are translated by the notes AI, so it must be set up (see Services).
+  Each language becomes a subtitle track inside the MP4 (pick it in VLC, QuickTime or the page's player) and an SRT file
+  in **Subtitles, all languages (ZIP)** for YouTube or your LMS. Machine translation can be wrong, so check important wording.
 
 The summary shows how many slides will be narrated and the estimated length. Press **Create narrated video** and watch
 the progress. When it finishes you can play the video in the page and download:

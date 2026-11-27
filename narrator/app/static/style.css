@@ -294,3 +294,13 @@ dialog::backdrop { background: rgba(10, 8, 18, .55); backdrop-filter: blur(3px);
 .voice-inline select:focus { outline: none; }
 .voice-inline:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { position: relative; cursor: pointer; }
+.chip input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.chip span { display: inline-flex; align-items: center; gap: 4px; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 600; font-size: .9rem; }
+.chip small { color: var(--muted); font-weight: 500; }
+.chip input:checked + span { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.chip input:disabled + span { opacity: .45; cursor: not-allowed; }
+.chip input:focus-visible + span { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); }
+.sub-note { font-weight: 400; font-size: .84rem; color: var(--muted); margin-top: 2px; }

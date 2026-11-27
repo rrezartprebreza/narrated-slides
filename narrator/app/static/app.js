@@ -138,7 +138,13 @@ function voiceSelect(id) {
 }
 
 // ---------- state ----------
-const DEFAULTS = { voice: "", speed: 1, pause: 0.8, silent: 3, res: 1080 };
+const DEFAULTS = { voice: "", speed: 1, pause: 0.8, silent: 3, res: 1080, subs: [] };
+const SUB_LANGS = [["en", "English"], ["sq", "Shqip"], ["it", "Italiano"], ["pt", "Português"], ["no", "Norsk"], ["tr", "Türkçe"]];
+function voiceLangCode(v) {
+  if (isAlbanian(v)) return "sq";
+  const m = /^([a-z])[fm]_/.exec(v || "");
+  return m ? ({ a: "en", b: "en", i: "it", p: "pt" })[m[1]] || null : null;
+}
 const S = {
   deck: null, notes: {}, cur: 1,
   health: null, voices: [], defaultVoice: "",
@@ -666,7 +672,37 @@ function renderExport() {
       h("div", { class: "field wide" }, h("label", { for: "speed" }, "Speaking speed ", speedVal), speed),
       h("label", { class: "field" }, "Pause after each slide (seconds)", pause),
       h("label", { class: "field" }, "Silent slide length (seconds)", silent),
-      h("div", { class: "field wide" }, "Video size", resSeg)));
+      h("div", { class: "field wide" }, "Video size", resSeg),
+      subsField()));
+
+  function subsField() {
+    const wrap = h("div", { class: "field wide" });
+    const note = h("p", { class: "sub-note" });
+    const chips = h("div", { class: "chips", role: "group", "aria-label": "Subtitle languages" });
+    const draw = () => {
+      const src = voiceLangCode(st.voice);
+      const ai = !!S.health?.llm_configured;
+      chips.replaceChildren(...SUB_LANGS.map(([code, label]) => {
+        const needsAi = code !== src;
+        const input = h("input", { type: "checkbox", value: code, checked: st.subs.includes(code), disabled: needsAi && !ai });
+        input.addEventListener("change", () => {
+          st.subs = SUB_LANGS.map(([c]) => c).filter((c) => c === code ? input.checked : st.subs.includes(c));
+          persist(); draw();
+        });
+        return h("label", { class: "chip" }, input, h("span", {}, label, code === src ? h("small", {}, " original") : null));
+      }));
+      const extra = st.subs.filter((c) => c !== src).length;
+      note.replaceChildren(...(!ai
+        ? ["Translating subtitles uses the notes AI, which isn't set up. Only the narration's own language is available. See Services (top right)."]
+        : extra
+          ? [`${extra} translated subtitle track${extra === 1 ? "" : "s"} will be added to the video and as SRT files. Translation runs on your AI model, so check important wording.`]
+          : ["Tick languages to add translated subtitles. You always get subtitles in the narration's own language."]));
+    };
+    draw();
+    voiceSel.addEventListener("change", draw);
+    wrap.append(h("span", {}, "Subtitles"), chips, note);
+    return wrap;
+  }
 
   const sum = h("div", { class: "summary" });
   const create = h("button", { class: "btn primary lg", type: "button" }, icon("film"), "Create narrated video");
@@ -704,8 +740,10 @@ function renderExport() {
       await flushSave();
       const { job_id } = await sendJSON(`/api/decks/${d.id}/render`, "POST", {
         notes: S.notes, voice: st.voice || null, speed: Number(st.speed), pause: Number(st.pause), silent_seconds: Number(st.silent), resolution: Number(st.res),
+        subtitle_languages: (st.subs || []).filter((c) => c === voiceLangCode(st.voice) || S.health?.llm_configured),
       });
-      await runJob(job_id, (j) => { bar.style.width = Math.round(j.progress * 100) + "%"; pct.textContent = Math.round(j.progress * 100) + "%"; stepEl.textContent = j.step; });
+      const res = await runJob(job_id, (j) => { bar.style.width = Math.round(j.progress * 100) + "%"; pct.textContent = Math.round(j.progress * 100) + "%"; stepEl.textContent = j.step; });
+      for (const w of res?.warnings || []) toast(w, "error", 9000);
       await loadDeckKeepingNotes(d.id);
       progress.hidden = true;
       renderResults(resultBox, true);
@@ -744,11 +782,19 @@ function renderResults(box, fresh) {
     "narrated.mp4": ["film", "Narrated video", "MP4, plays anywhere"],
     "narration.srt": ["subtitles", "Subtitles", "SRT, for YouTube, VLC, PowerPoint"],
     "narration-audio.zip": ["audio", "Audio per slide", "ZIP of MP3 files"],
+    "narration-subtitles.zip": ["subtitles", "Subtitles, all languages", "ZIP of SRT files"],
     "deck-with-notes.pptx": ["deck", "Deck with notes", "PPTX with your final notes inside"],
   };
-  const order = ["narrated.mp4", "narration.srt", "narration-audio.zip", "deck-with-notes.pptx"];
+  const order = ["narrated.mp4", "narration.srt", "narration-subtitles.zip", "narration-audio.zip", "deck-with-notes.pptx"];
   const outs = order.map((n) => d.outputs.find((o) => o.name === n)).filter(Boolean);
-  const player = h("video", { id: "player", controls: true, preload: "metadata", poster: imgUrl(d.slides[0]?.n ?? 1), src: url("narrated.mp4", "&inline=1") });
+  const player = h("video", { id: "player", controls: true, preload: "metadata", crossorigin: "anonymous", poster: imgUrl(d.slides[0]?.n ?? 1), src: url("narrated.mp4", "&inline=1") });
+  const names = new Set(d.outputs.map((o) => o.name));
+  const tracks = SUB_LANGS.filter(([c]) => names.has(`narration.${c}.srt`)).map(([c, label]) => [`narration.${c}.srt`, c, label]);
+  const srcCode = voiceLangCode(d.settings?.voice) || "en";
+  if (!tracks.some(([, c]) => c === srcCode)) {
+    tracks.unshift(["narration.srt", srcCode, (SUB_LANGS.find(([c]) => c === srcCode) || [, "Original"])[1]]);
+  }
+  tracks.forEach(([file, lang, label]) => player.append(h("track", { kind: "subtitles", src: url(file, "&vtt=1"), srclang: lang, label })));
   box.replaceChildren(
     h("div", { class: "done-banner" }, h("span", { class: "tick" }, icon("check")), fresh ? "Your video is ready" : "Your last video"),
     h("div", { class: "result-grid" },

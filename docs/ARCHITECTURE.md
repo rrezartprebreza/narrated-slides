@@ -36,6 +36,8 @@ Browser ──HTTP──▶ narrator (FastAPI, port 8000)
 2. **Edit**: the browser autosaves notes with `PUT /api/decks/{id}/notes`. Optional `POST …/suggest-notes` runs a job.
 3. **Render** (`POST …/render`): per slide, call TTS, probe the audio length, build a segment with FFmpeg (image + audio,
    or image + silence), then concatenate segments. Subtitles, the audio ZIP and the deck with notes are written alongside.
+   With `subtitle_languages`, the subtitle lines are translated by the notes LLM (JSON array in, JSON array out, same
+   timings), written as `narration.<code>.srt`, zipped, and embedded in the MP4 as `mov_text` tracks.
 4. The UI polls `GET /api/jobs/{id}` once a second for progress.
 
 ## API

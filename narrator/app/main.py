@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import __version__, config, llm, pipeline, presenton, store, tts
+from . import __version__, config, llm, pipeline, presenton, store, tts, video
 from .jobs import manager
 
 STATIC = Path(__file__).parent / "static"
@@ -69,6 +69,7 @@ class RenderRequest(BaseModel):
     pause: float = Field(0.8, ge=0, le=5)
     silent_seconds: float = Field(3.0, ge=0.5, le=30)
     resolution: Literal[720, 1080] = 1080
+    subtitle_languages: list[Literal["en", "sq", "it", "pt", "no", "tr"]] = Field(default_factory=list, max_length=6)
 
 
 def _check_notes(notes: dict[str, str]) -> dict[str, str]:
@@ -243,13 +244,15 @@ def render(deck_id: str, req: RenderRequest):
 
 
 @app.get("/api/decks/{deck_id}/files/{name}")
-def download(deck_id: str, name: str, inline: bool = False):
+def download(deck_id: str, name: str, inline: bool = False, vtt: bool = False):
     state = _deck_or_404(deck_id)
     if name not in pipeline.OUTPUT_FILES:
         raise HTTPException(404, "Unknown file.")
     path = store.deck_dir(deck_id) / "out" / name
     if not path.exists():
         raise HTTPException(404, "Not rendered yet.")
+    if vtt and name.endswith(".srt"):  # for the in-page player's subtitle tracks
+        return Response(video.srt_to_vtt(path.read_text(encoding="utf-8")), media_type="text/vtt; charset=utf-8")
     return FileResponse(
         path,
         filename=f"{pipeline._safe_name(state['name'])}-{name}",

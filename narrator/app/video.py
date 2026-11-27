@@ -107,17 +107,46 @@ def _ts(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
-def build_srt(entries: list[tuple[float, float, str]]) -> str:
-    """entries: (start_seconds, speech_duration_seconds, text) per slide."""
-    lines: list[str] = []
-    idx = 1
+def build_cues(entries: list[tuple[float, float, str]]) -> list[tuple[float, float, str]]:
+    """entries: (start_seconds, speech_duration_seconds, text) per slide -> timed subtitle cues."""
+    out: list[tuple[float, float, str]] = []
     for start, duration, text in entries:
         cues = split_cues(text)
         total_chars = sum(len(c) for c in cues) or 1
         t = start
         for cue in cues:
             span = duration * len(cue) / total_chars
-            lines += [str(idx), f"{_ts(t)} --> {_ts(t + span)}", cue, ""]
+            out.append((t, t + span, cue))
             t += span
-            idx += 1
+    return out
+
+
+def srt_from_cues(cues: list[tuple[float, float, str]], texts: list[str] | None = None) -> str:
+    lines: list[str] = []
+    for i, (start, end, text) in enumerate(cues):
+        lines += [str(i + 1), f"{_ts(start)} --> {_ts(end)}", (texts[i] if texts else text), ""]
     return "\n".join(lines)
+
+
+def build_srt(entries: list[tuple[float, float, str]]) -> str:
+    return srt_from_cues(build_cues(entries))
+
+
+def srt_to_vtt(srt: str) -> str:
+    body = re.sub(r"(\d\d:\d\d:\d\d),(\d\d\d)", r"\1.\2", srt.replace("\r\n", "\n"))
+    return "WEBVTT\n\n" + body
+
+
+def embed_subtitles(src: Path, tracks: list[tuple[Path, str, str]], dst: Path) -> None:
+    """Add soft subtitle tracks to an MP4. tracks: (srt_path, iso639_2_code, title)."""
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src)]
+    for path, _, _ in tracks:
+        cmd += ["-i", str(path)]
+    cmd += ["-map", "0:v", "-map", "0:a?"]
+    for i in range(len(tracks)):
+        cmd += ["-map", str(i + 1)]
+    cmd += ["-c:v", "copy", "-c:a", "copy", "-c:s", "mov_text"]
+    for i, (_, code, title) in enumerate(tracks):
+        cmd += [f"-metadata:s:s:{i}", f"language={code}", f"-metadata:s:s:{i}", f"title={title}"]
+    cmd += [f"-disposition:s:0", "default", "-movflags", "+faststart", str(dst)]
+    _run(cmd)

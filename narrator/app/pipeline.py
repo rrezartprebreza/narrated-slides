@@ -9,12 +9,36 @@ from pathlib import Path
 from . import llm, pptx_tools, presenton, store, tts, video
 from .jobs import Job
 
+# code -> (English name used in prompts, ISO 639-2 code for MP4 tracks, native label)
+SUBTITLE_LANGUAGES = {
+    "en": ("English", "eng", "English"),
+    "sq": ("Albanian", "sqi", "Shqip"),
+    "it": ("Italian", "ita", "Italiano"),
+    "pt": ("Portuguese", "por", "Português"),
+    "no": ("Norwegian (Bokmål)", "nor", "Norsk"),
+    "tr": ("Turkish", "tur", "Türkçe"),
+}
+
 OUTPUT_FILES = {
     "narrated.mp4": "Narrated video (MP4)",
     "narration-audio.zip": "Audio, one MP3 per slide (ZIP)",
     "narration.srt": "Subtitles (SRT)",
+    "narration-subtitles.zip": "Subtitles in all languages (ZIP)",
+    **{f"narration.{c}.srt": f"Subtitles, {v[0]} (SRT)" for c, v in SUBTITLE_LANGUAGES.items()},
     "deck-with-notes.pptx": "Deck with the final notes (PPTX)",
 }
+
+_KOKORO_LANG = {"a": "en", "b": "en", "i": "it", "p": "pt", "e": "es", "f": "fr"}
+
+
+def guess_language(voice: str | None) -> str | None:
+    """Best guess of the narration language from the voice name."""
+    v = (voice or "").lower()
+    if v.startswith(("sq_", "sq-")):
+        return "sq"
+    if len(v) > 2 and v[2] == "_" and v[1] in "fm":
+        return _KOKORO_LANG.get(v[0])
+    return None
 
 
 def _safe_name(name: str) -> str:
@@ -100,11 +124,15 @@ def render_deck(deck_id: str, job: Job, req: dict) -> dict:
     for s in slides:
         if str(s["n"]) in req["notes"]:
             s["notes"] = req["notes"][str(s["n"])].strip()
-    state["settings"] = {k: req[k] for k in ("voice", "speed", "pause", "silent_seconds", "resolution")}
+    state["settings"] = {k: req.get(k) for k in ("voice", "speed", "pause", "silent_seconds", "resolution", "subtitle_languages")}
     store.save(deck_id, state)
 
     if not any(tts.clean_for_speech(s["notes"]) for s in slides):
         raise pptx_tools.DeckError("No slide has narration text yet. Write notes first, or use “Write missing notes with AI”.")
+    langs = [c for c in (req.get("subtitle_languages") or []) if c in SUBTITLE_LANGUAGES]
+    source_lang = guess_language(req.get("voice"))
+    if any(c != source_lang for c in langs) and not llm.configured():
+        raise pptx_tools.DeckError("Translated subtitles need the notes AI. Set it up (see Services), or untick the extra languages.")
 
     out = d / "out"
     shutil.rmtree(out, ignore_errors=True)
@@ -134,12 +162,40 @@ def render_deck(deck_id: str, job: Job, req: dict) -> dict:
             srt_entries.append((clock, speech_len, tts.clean_for_speech(s["notes"])))
         clock += seg_len
 
-    job.update("Joining slides into one video…", 0.92)
+    job.update("Joining slides into one video…", 0.86 if langs else 0.92)
     video.concat(segments, out / "narrated.mp4")
     shutil.rmtree(seg_dir, ignore_errors=True)
 
-    job.update("Writing subtitles, audio bundle and deck…", 0.96)
-    (out / "narration.srt").write_text(video.build_srt(srt_entries), encoding="utf-8")
+    cues = video.build_cues(srt_entries)
+    (out / "narration.srt").write_text(video.srt_from_cues(cues), encoding="utf-8")
+    warnings: list[str] = []
+    tracks: list[tuple[Path, str, str]] = []
+    if langs:
+        lines = [c[2] for c in cues]
+        for k, code in enumerate(langs):
+            name, iso, label = SUBTITLE_LANGUAGES[code]
+            job.update(f"Translating subtitles into {name}…", 0.87 + 0.08 * k / len(langs))
+            path = out / f"narration.{code}.srt"
+            try:
+                texts = None if code == source_lang else llm.translate_lines(lines, name)
+            except Exception as exc:
+                warnings.append(f"{name} subtitles failed: {exc}")
+                continue
+            path.write_text(video.srt_from_cues(cues, texts), encoding="utf-8")
+            tracks.append((path, iso, label))
+        if source_lang not in langs:  # keep the original-language track too
+            orig = SUBTITLE_LANGUAGES.get(source_lang or "", ("Original", "und", "Original"))
+            tracks.insert(0, (out / "narration.srt", orig[1], orig[2]))
+        if tracks:
+            job.update("Adding subtitle tracks to the video…", 0.95)
+            tmp = out / "narrated.subs.mp4"
+            video.embed_subtitles(out / "narrated.mp4", tracks, tmp)
+            tmp.replace(out / "narrated.mp4")
+            with zipfile.ZipFile(out / "narration-subtitles.zip", "w", zipfile.ZIP_DEFLATED) as zf:
+                for path, _, _ in tracks:
+                    zf.write(path, path.name)
+
+    job.update("Writing audio bundle and deck…", 0.97)
     with zipfile.ZipFile(out / "narration-audio.zip", "w", zipfile.ZIP_STORED) as zf:
         for f in audio_files:
             zf.write(f, f.name)
@@ -154,4 +210,4 @@ def render_deck(deck_id: str, job: Job, req: dict) -> dict:
     state["outputs"] = outputs
     state["rendered"] = time.time()
     store.save(deck_id, state)
-    return {"outputs": outputs, "seconds": round(clock, 1)}
+    return {"outputs": outputs, "seconds": round(clock, 1), "warnings": warnings}
