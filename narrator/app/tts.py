@@ -93,8 +93,11 @@ def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "
     if voice.startswith("clone_"):
         payload.update(EMOTIONS.get(emotion, EMOTIONS["natural"]))
     last: Exception | None = None
-    # The TTS container can still be starting (first boot) - retry for ~1 minute.
-    for attempt in range(6):
+    clone = voice.startswith("clone_")
+    resets = 0
+    # The TTS container can still be starting (first boot) - retry for a while. A cloned voice's
+    # model takes a minute or two to load again after a restart, so it gets a longer window.
+    for attempt in range(10 if clone else 6):
         try:
             resp = httpx.post(
                 f"{base}/audio/speech",
@@ -109,9 +112,22 @@ def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "
             if resp.status_code < 500:  # client error: retrying will not help
                 raise TTSError(f"TTS request rejected ({resp.status_code}): {resp.text[:300]}")
             last = TTSError(f"TTS server error {resp.status_code}: {resp.text[:200]}")
-        except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
+        except (httpx.ReadError, httpx.WriteError, httpx.RemoteProtocolError) as exc:
+            # the service dropped the connection mid-request: it crashed or was killed
+            resets += 1
             last = exc
-        time.sleep(min(2 ** attempt, 15))
+            if resets >= 3:
+                break
+        except httpx.TransportError as exc:  # not up yet, or timed out
+            last = exc
+        time.sleep(min(2 ** attempt, 20))
+    if resets:
+        hint = ("The voice-cloning service stopped while speaking, usually because Docker ran out of memory. "
+                "Give Docker Desktop more memory (Settings, Resources, Memory: 12 GB or more), or stop Ollama and "
+                "Presenton while exporting with your own voice, then try again.") if clone else (
+                "The voice service stopped while speaking, usually because Docker ran out of memory. "
+                "Give Docker Desktop more memory (Settings, Resources), then try again.")
+        raise TTSError(hint)
     raise TTSError(f"Could not reach the TTS server at {base}: {last}")
 
 

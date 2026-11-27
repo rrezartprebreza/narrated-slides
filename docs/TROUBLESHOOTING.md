@@ -42,6 +42,15 @@ If the download keeps failing (for example behind a company proxy), download a v
 yourself and point `PIPER_VOICES` at a server you control, or copy them into the `piper_models` volume as `sq_edon.onnx` and
 `sq_edon.onnx.json`.
 
+## Export fails with "stopped while speaking" or "Connection reset by peer"
+
+The voice service was killed mid-export, almost always because Docker ran out of memory. The cloning model alone needs
+several GB, and Ollama, Presenton and Kokoro need their own.
+
+- Docker Desktop, **Settings, Resources, Memory**: raise it to 12 GB or more (keep a few GB free for macOS), then **Apply & restart**.
+- Or stop what you don't need while exporting: `docker compose stop ollama presenton`.
+- Check the total in Docker Desktop's **Containers** page ("Container memory usage").
+
 ## My voice: "add-on isn't started", or the cloned voice is slow
 
 - Start it: `docker compose --profile clone up -d --build`, then wait for the model download (several minutes the first time).

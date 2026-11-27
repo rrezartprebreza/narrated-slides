@@ -485,3 +485,22 @@ def test_my_voice_clone_flow(client, deck_file, tmp_path, monkeypatch):
 
     assert client.delete(f"/api/my-voices/{vid}").json() == {"ok": True}
     assert client.get("/api/my-voices").json()["voices"] == []
+
+
+def test_voice_service_crash_gives_memory_hint(monkeypatch):
+    import httpx as _httpx
+
+    from app import config, tts
+
+    monkeypatch.setattr(config, "CLONE_TTS_URL", "http://cloner.invalid:8000")
+    monkeypatch.setattr(tts.time, "sleep", lambda s: None)
+    calls = []
+
+    def boom(*a, **kw):
+        calls.append(1)
+        raise _httpx.ReadError("[Errno 104] Connection reset by peer")
+
+    monkeypatch.setattr(tts.httpx, "post", boom)
+    with pytest.raises(tts.TTSError) as err:
+        tts.speech("Hello there.", "clone_me")
+    assert "memory" in str(err.value) and len(calls) == 3
