@@ -104,12 +104,15 @@ async function runJob(jobId, onUpdate) {
 
 // ---------- voices ----------
 const KOKORO_LANG = { a: "English (US)", b: "English (UK)", e: "Spanish", f: "French", h: "Hindi", i: "Italian", j: "Japanese", p: "Portuguese", z: "Chinese" };
+const isClone = (v) => /^clone_/.test(v || "");
 function voiceLang(v) {
+  if (isClone(v)) return "My voices";
   if (/^sq[_-]/i.test(v)) return "Shqip (Albanian)";
   const m = /^([a-z])([fm])_/.exec(v);
   return (m && KOKORO_LANG[m[1]]) || "Other";
 }
 function voiceLabel(v) {
+  if (isClone(v)) return (S.myVoices.find((x) => x.id === v) || {}).name || v.slice(6).replace(/_/g, " ");
   const m = /^(?:[a-z][fm]|sq)_(.+)$/i.exec(v);
   if (!m) return v;
   const name = m[1].replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -125,7 +128,8 @@ function voiceSelect(id) {
   const list = S.voices.length ? S.voices : [st.voice || S.defaultVoice || "default"];
   const groups = new Map();
   for (const v of list) { const l = voiceLang(v); if (!groups.has(l)) groups.set(l, []); groups.get(l).push(v); }
-  const order = [...groups.keys()].sort((a, b) => (a === "Shqip (Albanian)" ? -1 : b === "Shqip (Albanian)" ? 1 : 0));
+  const rank = (l) => (l === "My voices" ? 0 : l === "Shqip (Albanian)" ? 1 : 2);
+  const order = [...groups.keys()].sort((a, b) => rank(a) - rank(b));
   const sel = h("select", { id, "aria-label": "Voice" }, order.map((lang) =>
     h("optgroup", { label: lang }, groups.get(lang).map((v) => h("option", { value: v, selected: v === st.voice }, voiceLabel(v))))));
   sel.addEventListener("change", () => {
@@ -142,6 +146,7 @@ const DEFAULTS = { voice: "", speed: 1, pause: 0.8, silent: 3, res: 1080, subs: 
 const SUB_LANGS = [["en", "English"], ["sq", "Shqip"], ["it", "Italiano"], ["pt", "Português"], ["no", "Norsk"], ["tr", "Türkçe"]];
 function voiceLangCode(v) {
   if (isAlbanian(v)) return "sq";
+  if (isClone(v)) return "en";
   const m = /^([a-z])[fm]_/.exec(v || "");
   return m ? ({ a: "en", b: "en", i: "it", p: "pt" })[m[1]] || null : null;
 }
@@ -149,7 +154,7 @@ const S = {
   deck: null, notes: {}, cur: 1,
   health: null, voices: [], defaultVoice: "",
   settings: { ...DEFAULTS, ...store.get("ns-settings", {}) },
-  dirty: false, saveTimer: null, audio: null, aiBusy: false,
+  dirty: false, saveTimer: null, audio: null, aiBusy: false, myVoices: [],
 };
 let E = {}; // script-view element refs
 
@@ -195,7 +200,12 @@ async function refreshHealth() {
 function refreshVoicePickers() {
   $$("select.voice-pick").forEach((old) => old.replaceWith(voiceSelect(old.id)));
 }
+async function loadMyVoices() {
+  if (S.health?.clone == null) { S.myVoices = []; return; }
+  try { S.myVoices = (await getJSON("/api/my-voices")).voices; } catch { S.myVoices = []; }
+}
 async function loadVoices() {
+  await loadMyVoices();
   try {
     const v = await getJSON("/api/voices");
     S.voices = v.voices; S.defaultVoice = v.default;
@@ -233,6 +243,11 @@ async function openStatus() {
     ...(hl.extra_tts === null || hl.extra_tts === undefined ? [] : [hl.extra_tts
       ? serviceRow("ok", "Albanian voice (Piper)", "optional", "Ready. Pick a Shqip voice to narrate Albanian slides.")
       : serviceRow("warn", "Albanian voice (Piper)", "optional", "Starting. On first start it downloads the Albanian voices (about 60 MB each). Give it a minute, then check its log.", "docker compose logs piper")]),
+    hl.clone == null
+      ? serviceRow("warn", "Voice cloning", "optional", "Not started. Clone your own English voice from a short recording.", "docker compose --profile clone up -d --build")
+      : hl.clone
+        ? serviceRow("ok", "Voice cloning", "optional", "Ready. Add your voice under Voice & export, My voice.")
+        : serviceRow("warn", "Voice cloning", "optional", "Starting. The first start downloads the model (about 2 GB), which takes a few minutes.", "docker compose logs cloner"),
     !hl.llm_configured
       ? serviceRow("warn", "Notes AI", "optional", "Not set up. It drafts notes for slides that have none; everything else works without it.", "docker compose --profile ollama up -d\n# then set NOTES_LLM_BASE_URL and NOTES_LLM_MODEL in .env")
       : hl.llm
@@ -668,7 +683,9 @@ function renderExport() {
   const settings = h("div", { class: "card" },
     h("h2", {}, "Voice and timing"),
     h("div", { class: "form-grid" },
-      h("div", { class: "field wide" }, h("label", { for: "voice" }, "Voice"), h("div", { class: "row-inline" }, voiceSel, sampleBtn)),
+      h("div", { class: "field wide" }, h("label", { for: "voice" }, "Voice"),
+        h("div", { class: "row-inline" }, voiceSel, sampleBtn,
+          h("button", { class: "btn sm", type: "button", onclick: openMyVoices }, icon("mic"), "My voice"))),
       h("div", { class: "field wide" }, h("label", { for: "speed" }, "Speaking speed ", speedVal), speed),
       h("label", { class: "field" }, "Pause after each slide (seconds)", pause),
       h("label", { class: "field" }, "Silent slide length (seconds)", silent),
@@ -809,6 +826,146 @@ function renderResults(box, fresh) {
       }))),
     h("p", { class: "hint" }, "Want to change something? Edit the notes or settings and create the video again. To change how a slide looks, edit the deck in PowerPoint and upload it again."));
   box.hidden = false;
+}
+
+// ---------- My voices (voice cloning) ----------
+const READ_ALOUD = "Hello, and welcome. In this short recording I speak clearly and at my normal pace, " +
+  "so the app can learn how my voice sounds. Thank you for listening, and enjoy the presentation.";
+
+function myVoicesDialog() {
+  let dlg = $("#dlg-voice");
+  if (!dlg) {
+    dlg = h("dialog", { id: "dlg-voice", "aria-labelledby": "dlg-voice-h" },
+      h("form", { method: "dialog", class: "dlg-head" }, h("h2", { id: "dlg-voice-h" }, "My voices"),
+        h("button", { class: "icon-btn", "aria-label": "Close" }, icon("x"))),
+      h("div", { class: "dlg-body", id: "voice-body" }));
+    dlg.addEventListener("close", () => { stopRecording(); stopAudio(); });
+    document.body.append(dlg);
+  }
+  return dlg;
+}
+
+let rec = null; // { recorder, stream, chunks, timer }
+function stopRecording() {
+  if (!rec) return;
+  clearInterval(rec.timer);
+  if (rec.recorder.state !== "inactive") rec.recorder.stop();
+  rec.stream.getTracks().forEach((t) => t.stop());
+  rec = null;
+}
+
+async function openMyVoices() {
+  const dlg = myVoicesDialog();
+  if (!dlg.open) dlg.showModal();
+  const body = $("#voice-body");
+  body.replaceChildren(h("p", { class: "muted" }, "Checking…"));
+  await refreshHealth();
+  const hl = S.health || {};
+  if (hl.clone == null) {
+    body.replaceChildren(
+      h("p", {}, "Voice cloning makes narration in your own voice from about 10 seconds of English speech. It runs on this computer, and your recording never leaves it."),
+      h("p", { class: "muted", style: "margin-top:10px" }, "It is an optional add-on. Start it once in Terminal, in the narrated-slides folder. The first start downloads the model (about 2 GB):"),
+      h("pre", { class: "codeblock" }, "docker compose --profile clone up -d --build"),
+      h("p", { class: "muted" }, "Then reopen this window."));
+    return;
+  }
+  await loadMyVoices();
+  const list = h("ul", { class: "myv-list" }, S.myVoices.map((v) => {
+    const del = h("button", { class: "btn sm ghost", type: "button" }, icon("trash"), "Delete");
+    del.addEventListener("click", async () => {
+      if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.replaceChildren("Delete for good?"); setTimeout(() => { if (del.isConnected) { delete del.dataset.armed; del.replaceChildren(icon("trash"), "Delete"); } }, 3000); return; }
+      try {
+        await api(`/api/my-voices/${v.id}`, { method: "DELETE" });
+        if (S.settings.voice === v.id) { S.settings.voice = S.defaultVoice; store.set("ns-settings", S.settings); }
+        await loadVoices(); refreshVoicePickers(); openMyVoices();
+      } catch (e) { toast(e.message, "error"); }
+    });
+    const use = h("button", { class: "btn sm", type: "button" }, "Use");
+    use.addEventListener("click", () => {
+      S.settings.voice = v.id; store.set("ns-settings", S.settings); refreshVoicePickers();
+      toast(`Using ${v.name}.`, "ok", 2500); dlg.close();
+    });
+    return h("li", {}, h("span", { class: "myv-ico" }, icon("mic")),
+      h("span", { class: "myv-name" }, h("strong", {}, v.name), h("small", {}, `${v.seconds} s sample`)), use, del);
+  }));
+  const status = hl.clone ? null : h("div", { class: "warn-box" }, "The cloning model is still loading (first start downloads about 2 GB). You can add your voice now; it will speak once the model is ready.");
+
+  // --- add form ---
+  let blob = null, blobName = "recording.webm";
+  const name = h("input", { type: "text", maxlength: "40", placeholder: "e.g. My lecture voice", id: "myv-name" });
+  const recBtn = h("button", { class: "btn", type: "button" }, icon("mic"), "Record");
+  const recTime = h("span", { class: "muted rec-time" });
+  const fileIn = h("input", { type: "file", accept: "audio/*", hidden: true });
+  const upBtn = h("button", { class: "btn ghost", type: "button", onclick: () => fileIn.click() }, icon("upload"), "Upload a clip");
+  const player = h("audio", { controls: true, hidden: true, class: "myv-player" });
+  const consent = h("input", { type: "checkbox", id: "myv-consent" });
+  const save = h("button", { class: "btn primary", type: "button", disabled: true }, icon("check"), "Save voice");
+  const err = h("p", { class: "error", hidden: true });
+  const ready = () => { save.disabled = !(blob && name.value.trim() && consent.checked); };
+  const setBlob = (b, fname) => {
+    blob = b; blobName = fname;
+    if (player.src) URL.revokeObjectURL(player.src);
+    player.src = URL.createObjectURL(b); player.hidden = false; ready();
+  };
+  fileIn.addEventListener("change", () => { const f = fileIn.files[0]; if (f) setBlob(f, f.name); fileIn.value = ""; });
+  name.addEventListener("input", ready); consent.addEventListener("change", ready);
+
+  recBtn.addEventListener("click", async () => {
+    if (rec) { stopRecording(); return; }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { toast("This browser can't record here. Upload a clip instead.", "error"); return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: true } }); }
+    catch { toast("Microphone access was blocked. Allow it in the browser, or upload a clip.", "error"); return; }
+    const recorder = new MediaRecorder(stream);
+    const chunks = [];
+    recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    recorder.onstop = () => {
+      recBtn.replaceChildren(icon("mic"), "Record again");
+      if (chunks.length) setBlob(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }), "recording.webm");
+    };
+    const started = Date.now();
+    rec = { recorder, stream, chunks, timer: setInterval(() => {
+      const sec = (Date.now() - started) / 1000;
+      recTime.textContent = `${sec.toFixed(0)} s` + (sec < 8 ? " (keep going)" : " (good, stop when done)");
+      if (sec >= 20) stopRecording();
+    }, 250) };
+    recorder.start();
+    recBtn.replaceChildren(icon("stop"), "Stop");
+    recTime.textContent = "0 s";
+  });
+
+  save.addEventListener("click", async () => {
+    err.hidden = true; save.disabled = true; save.replaceChildren(h("span", { class: "spinner" }), "Saving…");
+    const fd = new FormData();
+    fd.append("name", name.value.trim()); fd.append("consent", "true"); fd.append("file", blob, blobName);
+    try {
+      const v = await (await api("/api/my-voices", { method: "POST", body: fd })).json();
+      S.settings.voice = v.id; store.set("ns-settings", S.settings);
+      await loadVoices(); refreshVoicePickers();
+      toast(`Saved "${v.name}". It's selected now; press Hear it to listen.`, "ok", 6000);
+      dlg.close();
+    } catch (e) {
+      err.textContent = e.message; err.hidden = false; save.disabled = false; save.replaceChildren(icon("check"), "Save voice");
+    }
+  });
+
+  body.replaceChildren(
+    ...(status ? [status] : []),
+    ...(S.myVoices.length ? [h("h3", {}, "Saved voices"), list] : []),
+    h("h3", {}, S.myVoices.length ? "Add another voice" : "Add your voice"),
+    h("ol", { class: "guide" },
+      h("li", {}, "Find a quiet room and hold the microphone at a normal distance."),
+      h("li", {}, "Press ", h("strong", {}, "Record"), " and read this aloud in your normal speaking voice (10 to 20 seconds):",
+        h("blockquote", { class: "read-aloud" }, READ_ALOUD)),
+      h("li", {}, "Listen back, give it a name, and save. Or upload an existing clip of clean English speech.")),
+    h("div", { class: "row-inline rec-row" }, recBtn, upBtn, recTime, fileIn),
+    player,
+    h("label", { class: "field", style: "margin-top:14px" }, "Name", name),
+    h("label", { class: "consent" }, consent,
+      h("span", {}, "This is my own voice, or I have the speaker's permission to clone it.")),
+    err,
+    h("div", { class: "myv-actions" }, save),
+    h("p", { class: "muted small" }, "Cloned voices speak English. Recordings stay on this computer in the cloner's voices volume; delete them here any time."));
 }
 
 // ---------- keyboard ----------

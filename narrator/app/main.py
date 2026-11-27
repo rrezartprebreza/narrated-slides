@@ -7,7 +7,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, UploadFile
+import httpx
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -111,6 +112,7 @@ def health():
         "version": __version__,
         "tts": tts.healthy(),
         "extra_tts": tts.extra_healthy(),
+        "clone": tts.clone_healthy(),
         "default_voice": config.TTS_VOICE,
         "llm_configured": llm.configured(),
         "llm": llm.healthy(),
@@ -258,6 +260,45 @@ def download(deck_id: str, name: str, inline: bool = False, vtt: bool = False):
         filename=f"{pipeline._safe_name(state['name'])}-{name}",
         content_disposition_type="inline" if inline else "attachment",
     )
+
+
+# ---------- My voices (voice cloning) ----------
+
+def _clone_base() -> str:
+    if not config.CLONE_TTS_URL:
+        raise HTTPException(404, "Voice cloning isn't set up. Start it with: docker compose --profile clone up -d")
+    return config.CLONE_TTS_URL
+
+
+def _clone_call(method: str, path: str, **kw):
+    try:
+        resp = httpx.request(method, f"{_clone_base()}{path}", timeout=60, **kw)
+    except httpx.HTTPError:
+        raise HTTPException(503, "The voice-cloning service isn't answering. Check: docker compose logs cloner")
+    try:
+        body = resp.json()
+    except ValueError:
+        body = {"detail": resp.text[:300]}
+    if resp.status_code >= 400:
+        raise HTTPException(resp.status_code, body.get("detail", "Voice cloning failed."))
+    return body
+
+
+@app.get("/api/my-voices")
+def my_voices():
+    return _clone_call("GET", "/voices")
+
+
+@app.post("/api/my-voices")
+async def add_my_voice(name: str = Form(...), consent: bool = Form(False), file: UploadFile = File(...)):
+    data = await file.read()
+    return _clone_call("POST", "/voices", data={"name": name, "consent": str(consent).lower()},
+                       files={"file": (file.filename or "clip.webm", data, file.content_type or "application/octet-stream")})
+
+
+@app.delete("/api/my-voices/{voice_id}")
+def delete_my_voice(voice_id: str):
+    return _clone_call("DELETE", f"/voices/{voice_id}")
 
 
 @app.get("/api/jobs/{job_id}")

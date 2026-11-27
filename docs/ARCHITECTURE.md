@@ -25,6 +25,7 @@ Browser ──HTTP──▶ narrator (FastAPI, port 8000)
 | `tts.py`, `llm.py`, `presenton.py` | Clients for the external services. Retries and clear error messages. |
 | `video.py` | FFmpeg helpers, subtitle cue splitting. |
 | `config.py` | Environment variables, read once at startup. |
+| `../../cloner/` | Optional voice-cloning service (Chatterbox) with the same OpenAI-style API plus `/voices` for reference clips. |
 | `../../piper/` | Separate small service: Piper TTS behind the same OpenAI-style API, for Albanian and other Piper voices. |
 | `static/` | `index.html`, `style.css`, `app.js`, `logo.svg`. |
 | `assets/sample-deck.pptx` | The sample deck offered on the home page. |
@@ -79,7 +80,8 @@ Decks untouched for `RETENTION_DAYS` are removed at startup.
 - **LibreOffice for rendering.** Free and scriptable; fidelity is good, not perfect. A per-call profile directory plus a lock keeps
   parallel conversions from clashing.
 - **OpenAI-compatible interfaces** for speech and notes, so engines can be swapped through configuration.
-- **Two voice engines.** Voices listed by `EXTRA_TTS_BASE_URL` (Piper) go there; everything else goes to Kokoro.
+- **Several voice engines.** `clone_*` voices go to the cloner, voices listed by `EXTRA_TTS_BASE_URL` (Piper) go
+  there, and everything else goes to Kokoro.
 - **No authentication.** Intended to run on `localhost`. Do not expose it to the internet as is.
 - **Non-root container**, ports bound to `127.0.0.1`.
 

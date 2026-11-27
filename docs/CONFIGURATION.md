@@ -107,6 +107,28 @@ To turn the extra engine off, remove `EXTRA_TTS_BASE_URL` from the `narrator` se
 | `EXTRA_TTS_MODEL` | narrator | Model name sent to it (default `piper`). |
 | `PIPER_VOICES` | piper | Voices to download and serve. |
 
+## Voice cloning (optional)
+
+The `cloner` service runs [Chatterbox](https://github.com/resemble-ai/chatterbox) (MIT) and clones a voice from a short
+reference clip. It's in the `clone` profile, so it only starts when asked:
+
+```bash
+docker compose --profile clone up -d --build
+```
+
+- The first start downloads the model (about 2 GB) into the `cloner_models` volume. The Services panel shows
+  "Starting" until it is loaded.
+- Reference clips are stored in the `cloner_voices` volume, converted to mono 24 kHz and cut to 20 seconds.
+- It runs on the CPU by default (`CLONE_DEVICE=cpu`), which is slower than Kokoro: expect exports to take several times
+  longer. On a Linux or Windows machine with an NVIDIA GPU, set `CLONE_DEVICE=cuda` and give the service GPU access.
+- Chatterbox adds an inaudible watermark to everything it generates, so cloned speech can be identified as AI-made.
+- To always start it, add `COMPOSE_PROFILES=ollama,clone` (or just `clone`) to `.env`.
+
+| Variable | Where | Meaning |
+|---|---|---|
+| `CLONE_TTS_URL` | narrator | Address of the cloner (set in compose). Voices named `clone_*` are routed there. |
+| `CLONE_DEVICE` | cloner | `cpu` (default) or `cuda`. |
+
 ## GPU (Linux or Windows with NVIDIA)
 
 In `docker-compose.yml`, switch the Kokoro image to `ghcr.io/remsky/kokoro-fastapi-gpu` and uncomment its `deploy` block

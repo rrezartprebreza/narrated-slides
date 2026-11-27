@@ -406,3 +406,76 @@ def test_parse_translation_array():
     assert llm._parse_array('Sure! ```json\n["a", "b"]\n```', 2) == ["a", "b"]
     assert llm._parse_array('["a"]', 2) is None
     assert llm._parse_array("no json here", 1) is None
+
+
+def _cloner_app(voices_dir):
+    """The real cloner service with a fake model, so the whole My voices flow is exercised."""
+    import importlib.util
+
+    import numpy as np
+
+    path = Path(__file__).resolve().parents[2] / "cloner" / "app" / "main.py"
+    spec = importlib.util.spec_from_file_location("cloner_main", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.VOICES_DIR = voices_dir
+    mod.engine.start = lambda: None
+
+    class Out:
+        def __init__(self):
+            self.a = np.zeros(6000, dtype=np.float32)
+
+        def squeeze(self):
+            return self
+
+        detach = cpu = squeeze
+
+        def numpy(self):
+            return self.a
+
+    class Model:
+        sr = 24000
+        calls = []
+
+        def generate(self, text, audio_prompt_path=None):
+            Model.calls.append(text)
+            return Out()
+
+    mod.engine.model = Model()
+    voices_dir.mkdir(parents=True, exist_ok=True)
+    return mod.app, Model.calls
+
+
+def test_my_voice_clone_flow(client, deck_file, tmp_path, monkeypatch):
+    from app import config
+
+    # not set up -> clear message
+    monkeypatch.setattr(config, "CLONE_TTS_URL", "")
+    assert client.get("/api/health").json()["clone"] is None
+    assert "--profile clone" in client.get("/api/my-voices").json()["detail"]
+
+    cloner, calls = _cloner_app(tmp_path / "voices")
+    monkeypatch.setattr(config, "CLONE_TTS_URL", _serve(cloner))
+    assert client.get("/api/health").json()["clone"] is True
+
+    rec = subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=220:duration=9", "-f", "webm",
+                          "-c:a", "libopus", "-"], capture_output=True, check=True).stdout
+    r = client.post("/api/my-voices", data={"name": "Rrezart", "consent": "false"}, files={"file": ("rec.webm", rec, "audio/webm")})
+    assert r.status_code == 400 and "permission" in r.json()["detail"]
+    r = client.post("/api/my-voices", data={"name": "Rrezart", "consent": "true"}, files={"file": ("rec.webm", rec, "audio/webm")})
+    assert r.status_code == 200, r.text
+    vid = r.json()["id"]
+    assert vid == "clone_rrezart"
+    assert client.get("/api/my-voices").json()["voices"][0]["name"] == "Rrezart"
+    assert "clone_rrezart" in client.get("/api/voices").json()["voices"]
+
+    r = client.post("/api/tts/preview", json={"text": "Hello students. Welcome back!", "voice": vid})
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg"
+    assert calls[-2:] == ["Hello students.", "Welcome back!"]
+
+    deck_id = upload(client, deck_file)
+    job = wait(client, client.post(f"/api/decks/{deck_id}/render", json={"voice": vid, "resolution": 720}).json()["job_id"])
+    assert job["status"] == "done", job
+
+    assert client.delete(f"/api/my-voices/{vid}").json() == {"ok": True}
+    assert client.get("/api/my-voices").json()["voices"] == []

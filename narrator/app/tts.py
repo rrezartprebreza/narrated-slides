@@ -57,6 +57,8 @@ def _extra_list() -> list[str]:
 
 def engine_for(voice: str) -> tuple[str, str]:
     """(base_url, model) of the engine that has this voice."""
+    if voice.startswith("clone_") and config.CLONE_TTS_URL:
+        return f"{config.CLONE_TTS_URL}/v1", "chatterbox"
     if config.EXTRA_TTS_BASE_URL:
         if voice not in _extra_voices:
             _extra_list()
@@ -107,7 +109,13 @@ def voices() -> list[str]:
     except Exception:
         main = list(config.DEFAULT_VOICES)
     extra = [v for v in _extra_list() if v not in main]
-    return sorted(main) + sorted(extra)
+    clones: list[str] = []
+    if config.CLONE_TTS_URL:
+        try:
+            clones = _list(f"{config.CLONE_TTS_URL}/v1")
+        except Exception:
+            clones = []
+    return sorted(main) + sorted(extra) + sorted(clones)
 
 
 def _up(base: str) -> bool:
@@ -129,3 +137,15 @@ def extra_healthy() -> bool | None:
     if not config.EXTRA_TTS_BASE_URL:
         return None
     return _up(config.EXTRA_TTS_BASE_URL) and bool(_extra_list())
+
+
+def clone_healthy() -> bool | None:
+    """None when voice cloning is not set up; False while its model is still loading or it is down."""
+    if not config.CLONE_TTS_URL:
+        return None
+    try:
+        return httpx.get(f"{config.CLONE_TTS_URL}/health", timeout=3).status_code == 200
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        return None  # the optional cloner container isn't running
+    except Exception:
+        return False

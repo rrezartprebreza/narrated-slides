@@ -42,6 +42,15 @@ If the download keeps failing (for example behind a company proxy), download a v
 yourself and point `PIPER_VOICES` at a server you control, or copy them into the `piper_models` volume as `sq_edon.onnx` and
 `sq_edon.onnx.json`.
 
+## My voice: "add-on isn't started", or the cloned voice is slow
+
+- Start it: `docker compose --profile clone up -d --build`, then wait for the model download (several minutes the first time).
+  Check progress with `docker compose logs -f cloner`; it prints `model ready` when done.
+- The browser asks for microphone access the first time you press **Record**. If you blocked it, allow it in the
+  address bar, or upload a clip instead.
+- Bad clone quality is almost always the recording: use a quiet room, no music, one speaker, 10 to 20 seconds.
+- Cloning runs on the CPU. Keep notes short, use 720p, or give Docker Desktop more CPUs.
+
 ## "Notes AI" is amber or red
 
 Amber means it is not set up, which is fine: only **Write with AI** needs it. To enable it see

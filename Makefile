@@ -12,6 +12,7 @@ logs:          ## follow the narrator log
 test:          ## run the test-suite (needs ffmpeg, poppler and LibreOffice installed)
 	cd narrator && python -m pytest tests -q
 	cd piper && python -m pytest tests -q
+	cd cloner && python -m pytest tests -q
 
 screenshots:   ## regenerate docs/images (also needs playwright)
 	python scripts/make_screenshots.py

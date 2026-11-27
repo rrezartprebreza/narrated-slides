@@ -23,6 +23,11 @@ jobs:
       - name: Tests
         working-directory: narrator
         run: python -m pytest tests -q
+      - name: Cloner service tests (fake model)
+        working-directory: cloner
+        run: |
+          pip install -r requirements.txt
+          python -m pytest tests -q
       - name: Piper service tests
         working-directory: piper
         run: |
@@ -41,3 +46,4 @@ jobs:
         run: |
           docker build -t narrated-slides-narrator ./narrator
           docker build -t narrated-slides-piper ./piper
+          docker build -t narrated-slides-cloner ./cloner

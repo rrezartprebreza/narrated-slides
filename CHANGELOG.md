@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.0 (2026-11-27)
+
+- **My voice:** clone your own English voice from a 10 to 20 second recording, made in the browser or uploaded, with an
+  explicit permission checkbox. Runs locally with Chatterbox as the optional `clone` profile.
+- Cloned voices appear under "My voices" in every voice picker; manage or delete them in the My voice dialog.
+
 ## v1.2.0 (2026-11-27)
 
 - Subtitles in English, Albanian, Italian, Portuguese, Norwegian and Turkish: translated by the notes AI, embedded as

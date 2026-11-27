@@ -3,6 +3,7 @@
 #   cp .env.example .env
 #   docker compose up -d --build                      # slides + voice + the narrator app
 #   docker compose --profile ollama up -d --build     # ...plus a local LLM (Ollama)
+#   docker compose --profile clone up -d --build      # ...plus voice cloning (your own voice)
 #
 # Narrator app: http://localhost:8000     Presenton: http://localhost:5001
 name: narrated-slides
@@ -21,6 +22,8 @@ services:
       TTS_VOICE: ${TTS_VOICE:-af_heart}
       # Second voice engine (Piper) for languages Kokoro lacks; Albanian by default
       EXTRA_TTS_BASE_URL: http://piper:8000/v1
+      # Optional voice cloning (start with --profile clone)
+      CLONE_TTS_URL: http://cloner:8000
       # Optional: model that writes missing speaker notes (OpenAI-compatible chat API)
       NOTES_LLM_BASE_URL: ${NOTES_LLM_BASE_URL:-http://ollama:11434/v1}
       NOTES_LLM_MODEL: ${NOTES_LLM_MODEL:-llama3.2:3b}
@@ -62,6 +65,19 @@ services:
     volumes:
       - piper_models:/models
 
+  cloner:
+    # Optional: clone your own (English) voice with Chatterbox. Start with: --profile clone
+    # The first start downloads the model (~2 GB). Recordings stay in the cloner_voices volume.
+    profiles: ["clone"]
+    build: ./cloner
+    image: narrated-slides/cloner:local
+    restart: unless-stopped
+    environment:
+      CLONE_DEVICE: ${CLONE_DEVICE:-cpu}
+    volumes:
+      - cloner_models:/models
+      - cloner_voices:/voices
+
   presenton:
     image: ${PRESENTON_IMAGE:-ghcr.io/presenton/presenton@sha256:dd444e4384df0caeb7cb96a26bfa7543a12d2be19c83d661446b2087d09aed54}
     restart: unless-stopped
@@ -97,3 +113,5 @@ volumes:
   narrator_data:
   ollama_models:
   piper_models:
+  cloner_models:
+  cloner_voices:

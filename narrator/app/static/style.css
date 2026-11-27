@@ -304,3 +304,18 @@ dialog::backdrop { background: rgba(10, 8, 18, .55); backdrop-filter: blur(3px);
 .chip input:disabled + span { opacity: .45; cursor: not-allowed; }
 .chip input:focus-visible + span { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); }
 .sub-note { font-weight: 400; font-size: .84rem; color: var(--muted); margin-top: 2px; }
+
+.codeblock { background: var(--surface-2); padding: 10px 12px; border-radius: 10px; font: .86rem var(--mono); margin: 10px 0; overflow-x: auto; }
+.myv-list { list-style: none; padding: 0; margin: 0 0 6px; display: flex; flex-direction: column; gap: 8px; }
+.myv-list li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.myv-ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex: none; }
+.myv-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.myv-name small { color: var(--muted); }
+.read-aloud { margin: 8px 0 4px; padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 10px 10px 0; font-size: .95rem; line-height: 1.6; }
+.rec-row { margin-top: 12px; flex-wrap: wrap; }
+.rec-time { font-variant-numeric: tabular-nums; font-size: .9rem; }
+.myv-player { width: 100%; margin-top: 12px; }
+.consent { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-size: .92rem; cursor: pointer; }
+.consent input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.myv-actions { margin-top: 16px; display: flex; justify-content: flex-end; }
+.small { font-size: .82rem; margin-top: 12px; }
