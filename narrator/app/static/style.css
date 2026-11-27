@@ -323,3 +323,8 @@ dialog::backdrop { background: rgba(10, 8, 18, .55); backdrop-filter: blur(3px);
 .feature-pills { list-style: none; padding: 0; margin: -8px 0 24px; display: flex; flex-wrap: wrap; gap: 8px; }
 .feature-pills li { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: .88rem; font-weight: 600; color: var(--ink); }
 .feature-pills svg { color: var(--accent); }
+
+.pill-btn { all: unset; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.feature-pills li:has(.pill-btn) { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.feature-pills li:has(.pill-btn):hover { background: var(--accent-soft); }
+.pill-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 4px; border-radius: 999px; }

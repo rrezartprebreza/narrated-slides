@@ -968,6 +968,8 @@ async function openMyVoices() {
     h("p", { class: "muted small" }, "Cloned voices speak English. Recordings stay on this computer in the cloner's voices volume; delete them here any time."));
 }
 
+$("#pill-myvoice")?.addEventListener("click", () => openMyVoices());
+
 // ---------- keyboard ----------
 document.addEventListener("keydown", (e) => {
   if ($("#view-script").hidden || !S.deck || document.querySelector("dialog[open]")) return;
