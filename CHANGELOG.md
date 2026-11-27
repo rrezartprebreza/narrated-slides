@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.0 (2026-11-27)
+
+- Much faster cloned voices: Chatterbox Turbo by default (`CLONE_MODEL=turbo`), and the voice sample is analysed once
+  instead of for every sentence. `CLONE_MODEL=standard` keeps the slower, expressive model with Emotion.
+- Saved voice samples are cleaned (rumble filter, noise reduction, even loudness) for a better clone.
+
 ## v1.4.1 (2026-11-27)
 
 - Run in GitHub Codespaces: `.devcontainer/` starts every service automatically (needs a 16 GB machine).

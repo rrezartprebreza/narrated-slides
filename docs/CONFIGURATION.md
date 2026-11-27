@@ -120,7 +120,12 @@ docker compose --profile clone up -d --build
   "Starting" until it is loaded.
 - Reference clips can be audio or video files (up to 100 MB); only the audio is kept, converted to mono 24 kHz and cut to
   20 seconds from the chosen start point. They are stored in the `cloner_voices` volume.
-- Emotion presets map to Chatterbox's `exaggeration` / `cfg_weight`: Calm 0.3/0.5, Natural 0.5/0.5, Lively 0.8/0.35,
+- `CLONE_MODEL=turbo` (default) uses Chatterbox Turbo: several times faster, natural tone, no Emotion control.
+  `CLONE_MODEL=standard` is slower but supports the Emotion setting. Change it in `.env`, then
+  `docker compose --profile clone up -d`. Each model downloads once.
+- Your reference clip is analysed once and reused for every sentence, and it is cleaned when saved
+  (low rumble removed, light noise reduction, level evened out).
+- Emotion presets (standard model only) map to Chatterbox's `exaggeration` / `cfg_weight`: Calm 0.3/0.5, Natural 0.5/0.5, Lively 0.8/0.35,
   Dramatic 1.2/0.3.
 - It runs on the CPU by default (`CLONE_DEVICE=cpu`), which is slower than Kokoro: expect exports to take several times
   longer. On a Linux or Windows machine with an NVIDIA GPU, set `CLONE_DEVICE=cuda` and give the service GPU access.

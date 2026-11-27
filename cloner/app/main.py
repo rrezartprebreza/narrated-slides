@@ -26,6 +26,10 @@ from pydantic import BaseModel, Field
 
 VOICES_DIR = Path(os.environ.get("VOICES_DIR", "/voices"))
 DEVICE = os.environ.get("CLONE_DEVICE", "cpu")
+# turbo: much faster, no emotion control. standard: slower, supports the Emotion setting.
+MODEL_KIND = os.environ.get("CLONE_MODEL", "turbo").strip().lower()
+if MODEL_KIND not in ("turbo", "standard"):
+    MODEL_KIND = "turbo"
 MAX_UPLOAD = 100 * 1024 * 1024  # videos (e.g. a saved reel) are fine: only the audio is kept
 MEDIA = {"mp3": "audio/mpeg", "wav": "audio/wav"}
 
@@ -33,19 +37,27 @@ MEDIA = {"mp3": "audio/mpeg", "wav": "audio/wav"}
 class Engine:
     def __init__(self) -> None:
         self.model = None
+        self.kind = MODEL_KIND
         self.error: str | None = None
         self.lock = threading.Lock()
+        self.conds: dict[tuple[str, float], object] = {}  # analysed reference clips, reused across sentences
 
     def start(self) -> None:
         threading.Thread(target=self._load, daemon=True).start()
 
     def _load(self) -> None:
         try:
-            from chatterbox.tts import ChatterboxTTS
+            import torch
 
-            print("[cloner] loading Chatterbox (first start downloads about 2 GB)…", flush=True)
-            self.model = ChatterboxTTS.from_pretrained(device=DEVICE)
-            print("[cloner] model ready", flush=True)
+            torch.set_num_threads(max(1, os.cpu_count() or 4))
+            if self.kind == "turbo":
+                from chatterbox.tts_turbo import ChatterboxTurboTTS as Model
+            else:
+                from chatterbox.tts import ChatterboxTTS as Model
+
+            print(f"[cloner] loading Chatterbox {self.kind} (first start downloads the model)…", flush=True)
+            self.model = Model.from_pretrained(device=DEVICE)
+            print(f"[cloner] model ready ({self.kind}, {torch.get_num_threads()} CPU threads)", flush=True)
         except Exception as exc:
             self.error = f"{type(exc).__name__}: {exc}"[:400]
             print(f"[cloner] model failed to load: {self.error}", flush=True)
@@ -57,9 +69,20 @@ class Engine:
         chunks = split_text(text)
         pieces = []
         with self.lock:
+            # Analysing the reference clip is slow: do it once per voice (and file version), not per sentence.
+            key = (str(ref), ref.stat().st_mtime)
+            if key not in self.conds:
+                if self.kind == "turbo":
+                    self.model.prepare_conditionals(str(ref))
+                else:
+                    self.model.prepare_conditionals(str(ref), exaggeration=exaggeration)
+                self.conds[key] = self.model.conds
+            self.model.conds = self.conds[key]
             for chunk in chunks:
-                out = self.model.generate(chunk, audio_prompt_path=str(ref),
-                                          exaggeration=exaggeration, cfg_weight=cfg_weight)
+                if self.kind == "turbo":
+                    out = self.model.generate(chunk)
+                else:
+                    out = self.model.generate(chunk, exaggeration=exaggeration, cfg_weight=cfg_weight)
                 pieces.append(out.squeeze().detach().cpu().numpy())
                 pieces.append(np.zeros(int(self.model.sr * 0.25), dtype=np.float32))
         audio = np.concatenate(pieces) if pieces else np.zeros(1, dtype=np.float32)
@@ -135,7 +158,8 @@ def live():
 @app.get("/health")
 def health():
     body = {"status": "ready" if engine.model else ("error" if engine.error else "loading"),
-            "error": engine.error, "voices": len(voice_meta())}
+            "error": engine.error, "voices": len(voice_meta()), "model": engine.kind,
+            "emotion": engine.kind == "standard"}
     return body if engine.model else JSONResponse(body, status_code=503)
 
 
@@ -159,7 +183,9 @@ async def add_voice(name: str = Form(..., min_length=1, max_length=40), consent:
             raise HTTPException(400, "This file has no sound. Screen recordings on a Mac don't capture the computer's audio. "
                                      "Use Record to read the text aloud, or upload a video that has your voice in it.")
         # mono 24 kHz, silence trimmed at the start, at most 20 seconds
-        wav = ffmpeg(["-ss", f"{start:.2f}", "-i", src.name, "-vn", "-af", "silenceremove=start_periods=1:start_threshold=-45dB",
+        wav = ffmpeg(["-ss", f"{start:.2f}", "-i", src.name, "-vn", "-af",
+                      "silenceremove=start_periods=1:start_threshold=-45dB,highpass=f=70,afftdn=nf=-25,"
+                      "loudnorm=I=-20:TP=-2:LRA=11",
                       "-ac", "1", "-ar", "24000", "-t", "20", "-f", "wav", "-"])
     seconds = (len(wav) - 44) / (24000 * 2)
     if seconds < 4:
@@ -181,6 +207,7 @@ def delete_voice(voice_id: str):
         raise HTTPException(404, "Unknown voice.")
     for ext in (".wav", ".json"):
         (VOICES_DIR / f"{voice_id}{ext}").unlink(missing_ok=True)
+    engine.conds = {k: v for k, v in engine.conds.items() if not k[0].endswith(f"/{voice_id}.wav")}
     return {"ok": True}
 
 

@@ -74,6 +74,8 @@ services:
     restart: unless-stopped
     environment:
       CLONE_DEVICE: ${CLONE_DEVICE:-cpu}
+      # turbo = fast (default); standard = slower but supports the Emotion setting
+      CLONE_MODEL: ${CLONE_MODEL:-turbo}
     volumes:
       - cloner_models:/models
       - cloner_voices:/voices

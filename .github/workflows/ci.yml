@@ -48,4 +48,4 @@ jobs:
           docker build -t narrated-slides-piper ./piper
           docker build -t narrated-slides-cloner ./cloner
       - name: Cloner image can load Chatterbox
-        run: docker run --rm --entrypoint python narrated-slides-cloner -c "import chatterbox.tts, app.main; print('ok')"
+        run: docker run --rm --entrypoint python narrated-slides-cloner -c "import chatterbox.tts, chatterbox.tts_turbo, app.main; print('ok')"

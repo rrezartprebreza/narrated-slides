@@ -706,9 +706,16 @@ function renderExport() {
       input.addEventListener("change", () => { st.emotion = val; persist(); });
       return h("label", {}, input, h("span", {}, label));
     }));
-    const wrap = h("div", { class: "field wide" }, "Emotion", seg,
-      h("p", { class: "sub-note" }, "For your own voices: how expressive the delivery is. Press Hear it to compare."));
-    const sync = () => { wrap.hidden = !isClone(st.voice); };
+    const note = h("p", { class: "sub-note" });
+    const wrap = h("div", { class: "field wide" }, "Emotion", seg, note);
+    const sync = () => {
+      wrap.hidden = !isClone(st.voice);
+      const ok = !!S.health?.clone_emotion;
+      seg.querySelectorAll("input").forEach((i) => { i.disabled = !ok; });
+      note.textContent = ok
+        ? "For your own voices: how expressive the delivery is. Press Hear it to compare."
+        : "Your own voices use the fast model, which speaks in your natural tone. For Emotion, switch to the expressive (slower) model: set CLONE_MODEL=standard in .env.";
+    };
     sync();
     onVoiceChange(wrap, sync);
     return wrap;

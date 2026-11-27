@@ -436,15 +436,20 @@ def _cloner_app(voices_dir):
     class Model:
         sr = 24000
         calls = []
+        conds = None
+
+        def prepare_conditionals(self, path, exaggeration=0.5):
+            self.conds = path
 
         emotions = []
 
-        def generate(self, text, audio_prompt_path=None, exaggeration=0.5, cfg_weight=0.5):
+        def generate(self, text, exaggeration=0.5, cfg_weight=0.5):
             Model.calls.append(text)
             Model.emotions.append((exaggeration, cfg_weight))
             return Out()
 
     mod.engine.model = Model()
+    mod.engine.kind = "standard"  # the expressive model, so emotion settings reach generate()
     voices_dir.mkdir(parents=True, exist_ok=True)
     _cloner_app.emotions = Model.emotions
     return mod.app, Model.calls

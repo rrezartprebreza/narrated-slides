@@ -115,6 +115,7 @@ def health():
         "tts": tts.healthy(),
         "extra_tts": tts.extra_healthy(),
         "clone": tts.clone_healthy(),
+        "clone_emotion": tts.clone_supports_emotion(),
         "default_voice": config.TTS_VOICE,
         "llm_configured": llm.configured(),
         "llm": llm.healthy(),

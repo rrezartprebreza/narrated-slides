@@ -30,9 +30,16 @@ class FakeModel:
 
     def __init__(self):
         self.calls = []
+        self.prepared = []
+        self.conds = None
+        self.emotion = None
 
-    def generate(self, text, audio_prompt_path=None, exaggeration=0.5, cfg_weight=0.5):
-        self.calls.append((text, audio_prompt_path))
+    def prepare_conditionals(self, path, exaggeration=0.5):
+        self.prepared.append(path)
+        self.conds = ("conds", path)
+
+    def generate(self, text, exaggeration=None, cfg_weight=None):
+        self.calls.append((text, self.conds[1]))
         self.emotion = (exaggeration, cfg_weight)
         return FakeTensor(12000)
 
@@ -47,6 +54,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "VOICES_DIR", tmp_path)
     monkeypatch.setattr(main.engine, "start", lambda: None)
     monkeypatch.setattr(main.engine, "model", None)
+    monkeypatch.setattr(main.engine, "kind", "turbo")
+    monkeypatch.setattr(main.engine, "conds", {})
     with TestClient(main.app) as c:
         yield c
 
@@ -74,6 +83,10 @@ def test_voice_lifecycle(client):
     assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg" and len(r.content) > 500
     assert [c[0] for c in fake.calls] == ["Hello there.", "This is my cloned voice!", "Nice?"]
     assert all(c[1].endswith("clone_my_voice.wav") for c in fake.calls)
+    assert len(fake.prepared) == 1 and fake.emotion == (None, None)  # turbo: analysed once, no emotion args
+    client.post("/v1/audio/speech", json={"input": "Again.", "voice": "clone_my_voice"})
+    assert len(fake.prepared) == 1  # cached
+    assert client.get("/health").json()["model"] == "turbo"
     assert client.post("/v1/audio/speech", json={"input": "x", "voice": "af_heart"}).status_code == 400
 
     assert client.delete("/voices/clone_my_voice").json() == {"ok": True}
@@ -99,6 +112,7 @@ def test_emotion_and_video_upload(client):
     assert 7 <= r.json()["seconds"] <= 8.2
     fake = FakeModel()
     main.engine.model = fake
+    main.engine.kind = "standard"
     r = client.post("/v1/audio/speech", json={"input": "Wow!", "voice": "clone_reel", "exaggeration": 1.2, "cfg_weight": 0.3})
     assert r.status_code == 200 and fake.emotion == (1.2, 0.3)
     assert client.post("/v1/audio/speech", json={"input": "x", "voice": "clone_reel", "exaggeration": 9}).status_code == 422

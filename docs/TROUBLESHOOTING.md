@@ -57,7 +57,10 @@ several GB, and Ollama, Presenton and Kokoro need their own.
   Check progress with `docker compose logs -f cloner`; it prints `model ready` when done.
 - The browser asks for microphone access the first time you press **Record**. If you blocked it, allow it in the
   address bar, or upload a clip instead.
-- Bad clone quality is almost always the recording: use a quiet room, no music, one speaker, 10 to 20 seconds.
+- Bad clone quality is almost always the recording: use a quiet room, no music, one speaker, 10 to 20 seconds,
+  close to the microphone (a headset or AirPods mic is often better than the laptop mic). Record again after updating:
+  new recordings are cleaned automatically.
+- Too slow: keep the default `CLONE_MODEL=turbo`. Docker on a Mac can't use the Apple GPU, so cloning runs on the CPU.
 - Cloning runs on the CPU. Keep notes short, use 720p, or give Docker Desktop more CPUs.
 
 ## "Notes AI" is amber or red

@@ -177,3 +177,13 @@ def clone_healthy() -> bool | None:
         return None  # the optional cloner container isn't running
     except Exception:
         return False
+
+
+def clone_supports_emotion() -> bool:
+    """True when the cloner runs the expressive (standard) model rather than Turbo."""
+    if not config.CLONE_TTS_URL:
+        return False
+    try:
+        return bool(httpx.get(f"{config.CLONE_TTS_URL}/health", timeout=3).json().get("emotion"))
+    except Exception:
+        return False
