@@ -118,7 +118,10 @@ docker compose --profile clone up -d --build
 
 - The first start downloads the model (about 2 GB) into the `cloner_models` volume. The Services panel shows
   "Starting" until it is loaded.
-- Reference clips are stored in the `cloner_voices` volume, converted to mono 24 kHz and cut to 20 seconds.
+- Reference clips can be audio or video files (up to 100 MB); only the audio is kept, converted to mono 24 kHz and cut to
+  20 seconds from the chosen start point. They are stored in the `cloner_voices` volume.
+- Emotion presets map to Chatterbox's `exaggeration` / `cfg_weight`: Calm 0.3/0.5, Natural 0.5/0.5, Lively 0.8/0.35,
+  Dramatic 1.2/0.3.
 - It runs on the CPU by default (`CLONE_DEVICE=cpu`), which is slower than Kokoro: expect exports to take several times
   longer. On a Linux or Windows machine with an NVIDIA GPU, set `CLONE_DEVICE=cuda` and give the service GPU access.
 - Chatterbox adds an inaudible watermark to everything it generates, so cloned speech can be identified as AI-made.

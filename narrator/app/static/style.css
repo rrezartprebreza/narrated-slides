@@ -328,3 +328,5 @@ dialog::backdrop { background: rgba(10, 8, 18, .55); backdrop-filter: blur(3px);
 .feature-pills li:has(.pill-btn) { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
 .feature-pills li:has(.pill-btn):hover { background: var(--accent-soft); }
 .pill-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 4px; border-radius: 999px; }
+
+video.myv-player { max-height: 220px; background: #000; border-radius: 10px; }

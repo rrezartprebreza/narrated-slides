@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 VOICES_DIR = Path(os.environ.get("VOICES_DIR", "/voices"))
 DEVICE = os.environ.get("CLONE_DEVICE", "cpu")
-MAX_UPLOAD = 25 * 1024 * 1024
+MAX_UPLOAD = 100 * 1024 * 1024  # videos (e.g. a saved reel) are fine: only the audio is kept
 MEDIA = {"mp3": "audio/mpeg", "wav": "audio/wav"}
 
 
@@ -50,7 +50,7 @@ class Engine:
             self.error = f"{type(exc).__name__}: {exc}"[:400]
             print(f"[cloner] model failed to load: {self.error}", flush=True)
 
-    def wav(self, text: str, ref: Path) -> bytes:
+    def wav(self, text: str, ref: Path, exaggeration: float = 0.5, cfg_weight: float = 0.5) -> bytes:
         """Generate sentence by sentence (long inputs make the model drift) and join as 16-bit WAV."""
         import numpy as np
 
@@ -58,7 +58,8 @@ class Engine:
         pieces = []
         with self.lock:
             for chunk in chunks:
-                out = self.model.generate(chunk, audio_prompt_path=str(ref))
+                out = self.model.generate(chunk, audio_prompt_path=str(ref),
+                                          exaggeration=exaggeration, cfg_weight=cfg_weight)
                 pieces.append(out.squeeze().detach().cpu().numpy())
                 pieces.append(np.zeros(int(self.model.sr * 0.25), dtype=np.float32))
         audio = np.concatenate(pieces) if pieces else np.zeros(1, dtype=np.float32)
@@ -106,7 +107,7 @@ def voice_meta() -> list[dict]:
 def ffmpeg(args: list[str], data: bytes | None = None) -> bytes:
     proc = subprocess.run(["ffmpeg", "-loglevel", "error", *args], input=data, capture_output=True)
     if proc.returncode != 0:
-        raise HTTPException(400, "Could not read that audio file. Try a WAV, MP3, M4A or WebM recording.")
+        raise HTTPException(400, "Could not read that file. Try an MP4/MOV video or a WAV, MP3, M4A or WebM recording.")
     return proc.stdout
 
 
@@ -139,17 +140,17 @@ def list_my_voices():
 
 @app.post("/voices")
 async def add_voice(name: str = Form(..., min_length=1, max_length=40), consent: bool = Form(False),
-                    file: UploadFile = File(...)):
+                    file: UploadFile = File(...), start: float = Form(0.0, ge=0, le=3600)):
     if not consent:
         raise HTTPException(400, "Please confirm this is your voice or that you have permission to use it.")
     data = await file.read(MAX_UPLOAD + 1)
     if len(data) > MAX_UPLOAD:
-        raise HTTPException(413, "The recording is too large (25 MB max).")
+        raise HTTPException(413, "The file is too large (100 MB max). Trim the video first.")
     with tempfile.NamedTemporaryFile(suffix=Path(file.filename or "clip").suffix or ".bin") as src:
         src.write(data)
         src.flush()
         # mono 24 kHz, silence trimmed at the start, at most 20 seconds
-        wav = ffmpeg(["-i", src.name, "-af", "silenceremove=start_periods=1:start_threshold=-45dB",
+        wav = ffmpeg(["-ss", f"{start:.2f}", "-i", src.name, "-vn", "-af", "silenceremove=start_periods=1:start_threshold=-45dB",
                       "-ac", "1", "-ar", "24000", "-t", "20", "-f", "wav", "-"])
     seconds = (len(wav) - 44) / (24000 * 2)
     if seconds < 4:
@@ -185,6 +186,8 @@ class SpeechRequest(BaseModel):
     model: str | None = None
     speed: float = 1.0
     response_format: str = "mp3"
+    exaggeration: float = Field(0.5, ge=0.25, le=2.0)  # emotion: 0.3 calm ... 1.2+ dramatic
+    cfg_weight: float = Field(0.5, ge=0.0, le=1.0)
 
 
 @app.post("/v1/audio/speech")
@@ -196,7 +199,7 @@ def speech(req: SpeechRequest):
         raise HTTPException(400, f"Unknown voice '{req.voice}'.")
     if engine.model is None:
         raise HTTPException(503, engine.error or "The voice-cloning model is still loading. Try again in a minute.")
-    audio = engine.wav(req.input, ref)
+    audio = engine.wav(req.input, ref, req.exaggeration, req.cfg_weight)
     speed = max(0.5, min(2.0, req.speed))
     filters = [] if abs(speed - 1.0) < 0.01 else ["-af", f"atempo={speed}"]
     if req.response_format == "mp3":

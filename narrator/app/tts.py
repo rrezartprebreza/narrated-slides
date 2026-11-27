@@ -67,7 +67,17 @@ def engine_for(voice: str) -> tuple[str, str]:
     return config.TTS_BASE_URL, config.TTS_MODEL
 
 
-def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "mp3") -> bytes:
+# Emotion presets for cloned voices (Chatterbox: higher exaggeration = more expressive,
+# lower cfg_weight = slower, more deliberate delivery that suits strong emotion).
+EMOTIONS = {
+    "calm": {"exaggeration": 0.3, "cfg_weight": 0.5},
+    "natural": {"exaggeration": 0.5, "cfg_weight": 0.5},
+    "lively": {"exaggeration": 0.8, "cfg_weight": 0.35},
+    "dramatic": {"exaggeration": 1.2, "cfg_weight": 0.3},
+}
+
+
+def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "mp3", emotion: str = "natural") -> bytes:
     text = clean_for_speech(text)
     if not text:
         raise TTSError("Nothing to say: the text is empty.")
@@ -80,6 +90,8 @@ def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "
         "response_format": fmt,
         "speed": speed,
     }
+    if voice.startswith("clone_"):
+        payload.update(EMOTIONS.get(emotion, EMOTIONS["natural"]))
     last: Exception | None = None
     # The TTS container can still be starting (first boot) - retry for ~1 minute.
     for attempt in range(6):

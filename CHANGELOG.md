@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.4.0 (2026-11-27)
+
+- Emotion for your own voices: Calm, Natural, Lively or Dramatic (Chatterbox expressiveness), in previews and exports.
+- My voice accepts video files too (for example a saved reel), with a "Start at" field to skip music or an intro.
+
 ## v1.3.0 (2026-11-27)
 
 - **My voice:** clone your own English voice from a 10 to 20 second recording, made in the browser or uploaded, with an

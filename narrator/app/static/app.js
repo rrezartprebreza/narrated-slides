@@ -136,13 +136,15 @@ function voiceSelect(id) {
     st.voice = sel.value;
     store.set("ns-settings", S.settings);
     $$("select.voice-pick").forEach((o) => { if (o !== sel) o.value = sel.value; });
+    document.dispatchEvent(new Event("ns-voice-changed"));
   });
   sel.classList.add("voice-pick");
   return sel;
 }
 
 // ---------- state ----------
-const DEFAULTS = { voice: "", speed: 1, pause: 0.8, silent: 3, res: 1080, subs: [] };
+const DEFAULTS = { voice: "", speed: 1, pause: 0.8, silent: 3, res: 1080, subs: [], emotion: "natural" };
+const EMOTIONS = [["calm", "Calm"], ["natural", "Natural"], ["lively", "Lively"], ["dramatic", "Dramatic"]];
 const SUB_LANGS = [["en", "English"], ["sq", "Shqip"], ["it", "Italiano"], ["pt", "Português"], ["no", "Norsk"], ["tr", "Türkçe"]];
 function voiceLangCode(v) {
   if (isAlbanian(v)) return "sq";
@@ -199,6 +201,11 @@ async function refreshHealth() {
 }
 function refreshVoicePickers() {
   $$("select.voice-pick").forEach((old) => old.replaceWith(voiceSelect(old.id)));
+  document.dispatchEvent(new Event("ns-voice-changed"));
+}
+function onVoiceChange(el, fn) {  // runs fn while el is on the page
+  const handler = () => { if (!el.isConnected) document.removeEventListener("ns-voice-changed", handler); else fn(); };
+  document.addEventListener("ns-voice-changed", handler);
 }
 async function loadMyVoices() {
   if (S.health?.clone == null) { S.myVoices = []; return; }
@@ -455,7 +462,7 @@ async function playPreview(text, btn, labels) {
   try {
     const res = await api("/api/tts/preview", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text.slice(0, 1500), voice: S.settings.voice || null, speed: Number(S.settings.speed) || 1 }),
+      body: JSON.stringify({ text: text.slice(0, 1500), voice: S.settings.voice || null, speed: Number(S.settings.speed) || 1, emotion: S.settings.emotion || "natural" }),
     });
     const url = URL.createObjectURL(await res.blob());
     if (!btn.dataset.loading) { URL.revokeObjectURL(url); return; } // cancelled while loading
@@ -686,11 +693,26 @@ function renderExport() {
       h("div", { class: "field wide" }, h("label", { for: "voice" }, "Voice"),
         h("div", { class: "row-inline" }, voiceSel, sampleBtn,
           h("button", { class: "btn sm", type: "button", onclick: openMyVoices }, icon("mic"), "My voice"))),
+      emotionField(),
       h("div", { class: "field wide" }, h("label", { for: "speed" }, "Speaking speed ", speedVal), speed),
       h("label", { class: "field" }, "Pause after each slide (seconds)", pause),
       h("label", { class: "field" }, "Silent slide length (seconds)", silent),
       h("div", { class: "field wide" }, "Video size", resSeg),
       subsField()));
+
+  function emotionField() {
+    const seg = h("div", { class: "seg", role: "radiogroup", "aria-label": "Emotion" }, EMOTIONS.map(([val, label]) => {
+      const input = h("input", { type: "radio", name: "emotion", value: val, checked: (st.emotion || "natural") === val });
+      input.addEventListener("change", () => { st.emotion = val; persist(); });
+      return h("label", {}, input, h("span", {}, label));
+    }));
+    const wrap = h("div", { class: "field wide" }, "Emotion", seg,
+      h("p", { class: "sub-note" }, "For your own voices: how expressive the delivery is. Press Hear it to compare."));
+    const sync = () => { wrap.hidden = !isClone(st.voice); };
+    sync();
+    onVoiceChange(wrap, sync);
+    return wrap;
+  }
 
   function subsField() {
     const wrap = h("div", { class: "field wide" });
@@ -716,7 +738,7 @@ function renderExport() {
           : ["Tick languages to add translated subtitles. You always get subtitles in the narration's own language."]));
     };
     draw();
-    voiceSel.addEventListener("change", draw);
+    onVoiceChange(wrap, draw);
     wrap.append(h("span", {}, "Subtitles"), chips, note);
     return wrap;
   }
@@ -757,6 +779,7 @@ function renderExport() {
       await flushSave();
       const { job_id } = await sendJSON(`/api/decks/${d.id}/render`, "POST", {
         notes: S.notes, voice: st.voice || null, speed: Number(st.speed), pause: Number(st.pause), silent_seconds: Number(st.silent), resolution: Number(st.res),
+        emotion: st.emotion || "natural",
         subtitle_languages: (st.subs || []).filter((c) => c === voiceLangCode(st.voice) || S.health?.llm_configured),
       });
       const res = await runJob(job_id, (j) => { bar.style.width = Math.round(j.progress * 100) + "%"; pct.textContent = Math.round(j.progress * 100) + "%"; stepEl.textContent = j.step; });
@@ -895,9 +918,12 @@ async function openMyVoices() {
   const name = h("input", { type: "text", maxlength: "40", placeholder: "e.g. My lecture voice", id: "myv-name" });
   const recBtn = h("button", { class: "btn", type: "button" }, icon("mic"), "Record");
   const recTime = h("span", { class: "muted rec-time" });
-  const fileIn = h("input", { type: "file", accept: "audio/*", hidden: true });
-  const upBtn = h("button", { class: "btn ghost", type: "button", onclick: () => fileIn.click() }, icon("upload"), "Upload a clip");
-  const player = h("audio", { controls: true, hidden: true, class: "myv-player" });
+  const fileIn = h("input", { type: "file", accept: "audio/*,video/*,.mp4,.mov,.m4a,.mp3,.wav", hidden: true });
+  const upBtn = h("button", { class: "btn ghost", type: "button", onclick: () => fileIn.click() }, icon("upload"), "Upload audio or video");
+  const startIn = h("input", { type: "number", min: "0", step: "0.5", value: "0", id: "myv-start" });
+  const startField = h("label", { class: "field", hidden: true, style: "margin-top:12px" },
+    "Start at (seconds): skip music or an intro, then 20 seconds are used", startIn);
+  let player = h("audio", { controls: true, hidden: true, class: "myv-player" });
   const consent = h("input", { type: "checkbox", id: "myv-consent" });
   const save = h("button", { class: "btn primary", type: "button", disabled: true }, icon("check"), "Save voice");
   const err = h("p", { class: "error", hidden: true });
@@ -905,9 +931,17 @@ async function openMyVoices() {
   const setBlob = (b, fname) => {
     blob = b; blobName = fname;
     if (player.src) URL.revokeObjectURL(player.src);
-    player.src = URL.createObjectURL(b); player.hidden = false; ready();
+    const isVideo = (b.type || "").startsWith("video/") || /\.(mp4|mov|m4v|webm)$/i.test(fname) && !/^recording/.test(fname);
+    const next = h(isVideo ? "video" : "audio", { controls: true, class: "myv-player", playsinline: true });
+    player.replaceWith(next); player = next;
+    player.src = URL.createObjectURL(b); ready();
   };
-  fileIn.addEventListener("change", () => { const f = fileIn.files[0]; if (f) setBlob(f, f.name); fileIn.value = ""; });
+  fileIn.addEventListener("change", () => {
+    const f = fileIn.files[0];
+    if (f) { setBlob(f, f.name); startField.hidden = false; startIn.value = "0"; }
+    fileIn.value = "";
+  });
+  startIn.addEventListener("input", () => { if (player.src && !player.hidden) player.currentTime = Number(startIn.value) || 0; });
   name.addEventListener("input", ready); consent.addEventListener("change", ready);
 
   recBtn.addEventListener("click", async () => {
@@ -919,6 +953,7 @@ async function openMyVoices() {
     const recorder = new MediaRecorder(stream);
     const chunks = [];
     recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    startField.hidden = true; startIn.value = "0";
     recorder.onstop = () => {
       recBtn.replaceChildren(icon("mic"), "Record again");
       if (chunks.length) setBlob(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }), "recording.webm");
@@ -938,6 +973,7 @@ async function openMyVoices() {
     err.hidden = true; save.disabled = true; save.replaceChildren(h("span", { class: "spinner" }), "Saving…");
     const fd = new FormData();
     fd.append("name", name.value.trim()); fd.append("consent", "true"); fd.append("file", blob, blobName);
+    fd.append("start", String(Math.max(0, Number(startIn.value) || 0)));
     try {
       const v = await (await api("/api/my-voices", { method: "POST", body: fd })).json();
       S.settings.voice = v.id; store.set("ns-settings", S.settings);
@@ -957,9 +993,10 @@ async function openMyVoices() {
       h("li", {}, "Find a quiet room and hold the microphone at a normal distance."),
       h("li", {}, "Press ", h("strong", {}, "Record"), " and read this aloud in your normal speaking voice (10 to 20 seconds):",
         h("blockquote", { class: "read-aloud" }, READ_ALOUD)),
-      h("li", {}, "Listen back, give it a name, and save. Or upload an existing clip of clean English speech.")),
+      h("li", {}, "Listen back, give it a name, and save. You can also upload a video or audio file of you speaking English (for example a saved reel): pick a part with only your voice, no music.")),
     h("div", { class: "row-inline rec-row" }, recBtn, upBtn, recTime, fileIn),
     player,
+    startField,
     h("label", { class: "field", style: "margin-top:14px" }, "Name", name),
     h("label", { class: "consent" }, consent,
       h("span", {}, "This is my own voice, or I have the speaker's permission to clone it.")),

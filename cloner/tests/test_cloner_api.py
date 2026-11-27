@@ -31,8 +31,9 @@ class FakeModel:
     def __init__(self):
         self.calls = []
 
-    def generate(self, text, audio_prompt_path=None):
+    def generate(self, text, audio_prompt_path=None, exaggeration=0.5, cfg_weight=0.5):
         self.calls.append((text, audio_prompt_path))
+        self.emotion = (exaggeration, cfg_weight)
         return FakeTensor(12000)
 
 
@@ -84,3 +85,20 @@ def test_voice_lifecycle(client):
 def test_split_text_keeps_long_sentences_short():
     parts = main.split_text("word " * 200 + ". Short one.")
     assert all(len(p) <= 281 for p in parts) and parts[-1] == "Short one."
+
+
+def test_emotion_and_video_upload(client):
+    video = subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=320x240:d=9",
+                            "-f", "lavfi", "-i", "sine=frequency=180:duration=9", "-shortest", "-c:v", "libx264",
+                            "-c:a", "aac", "-f", "mp4", "-movflags", "frag_keyframe+empty_moov", "-"],
+                           capture_output=True, check=True).stdout
+    r = client.post("/voices", data={"name": "Reel", "consent": "true", "start": "7"}, files={"file": ("reel.mp4", video, "video/mp4")})
+    assert r.status_code == 400 and "too short" in r.json()["detail"]  # only 2 s left after skipping 7 s
+    r = client.post("/voices", data={"name": "Reel", "consent": "true", "start": "1"}, files={"file": ("reel.mp4", video, "video/mp4")})
+    assert r.status_code == 200, r.text
+    assert 7 <= r.json()["seconds"] <= 8.2
+    fake = FakeModel()
+    main.engine.model = fake
+    r = client.post("/v1/audio/speech", json={"input": "Wow!", "voice": "clone_reel", "exaggeration": 1.2, "cfg_weight": 0.3})
+    assert r.status_code == 200 and fake.emotion == (1.2, 0.3)
+    assert client.post("/v1/audio/speech", json={"input": "x", "voice": "clone_reel", "exaggeration": 9}).status_code == 422

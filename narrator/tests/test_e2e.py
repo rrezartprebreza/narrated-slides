@@ -437,12 +437,16 @@ def _cloner_app(voices_dir):
         sr = 24000
         calls = []
 
-        def generate(self, text, audio_prompt_path=None):
+        emotions = []
+
+        def generate(self, text, audio_prompt_path=None, exaggeration=0.5, cfg_weight=0.5):
             Model.calls.append(text)
+            Model.emotions.append((exaggeration, cfg_weight))
             return Out()
 
     mod.engine.model = Model()
     voices_dir.mkdir(parents=True, exist_ok=True)
+    _cloner_app.emotions = Model.emotions
     return mod.app, Model.calls
 
 
@@ -472,6 +476,8 @@ def test_my_voice_clone_flow(client, deck_file, tmp_path, monkeypatch):
     r = client.post("/api/tts/preview", json={"text": "Hello students. Welcome back!", "voice": vid})
     assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg"
     assert calls[-2:] == ["Hello students.", "Welcome back!"]
+    client.post("/api/tts/preview", json={"text": "Amazing!", "voice": vid, "emotion": "dramatic"})
+    assert _cloner_app.emotions[-1] == (1.2, 0.3)
 
     deck_id = upload(client, deck_file)
     job = wait(client, client.post(f"/api/decks/{deck_id}/render", json={"voice": vid, "resolution": 720}).json()["job_id"])
