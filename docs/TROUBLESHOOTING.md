@@ -60,12 +60,10 @@ several GB, and Ollama, Presenton and Kokoro need their own.
 - Bad clone quality is almost always the recording: use a quiet room, no music, one speaker, 10 to 20 seconds,
   close to the microphone (a headset or AirPods mic is often better than the laptop mic). Record again after updating:
   new recordings are cleaned automatically.
-- Doesn't sound enough like you: on an Apple Silicon Mac try `CLONE_MODEL=qwen ./scripts/run-cloner-mac.sh start`
-  (stop the running one first with `./scripts/run-cloner-mac.sh stop`), then record your voice again so it is saved
-  with what you said.
-- Qwen3-TTS log shows `sox: command not found`: harmless; `brew install sox` silences it.
-- Too slow: keep the default `CLONE_MODEL=turbo`. Docker on a Mac can't use the Apple GPU, so cloning runs on the CPU.
-  On an M-series Mac, run cloning natively on the GPU with `./scripts/run-cloner-mac.sh` (see Configuration).
+- Doesn't sound enough like you: record again and make sure **What is said in the clip** matches your words exactly.
+- `sox: command not found` in the log: harmless; `brew install sox` silences it.
+- Too slow: Docker on a Mac can't use the Apple GPU. On an M-series Mac run cloning natively with
+  `./scripts/run-cloner-mac.sh start` (see Configuration).
 - Cloning runs on the CPU. Keep notes short, use 720p, or give Docker Desktop more CPUs.
 
 ## "Notes AI" is amber or red

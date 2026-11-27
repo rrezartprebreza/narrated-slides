@@ -109,42 +109,42 @@ To turn the extra engine off, remove `EXTRA_TTS_BASE_URL` from the `narrator` se
 
 ## Voice cloning (optional)
 
-The `cloner` service runs [Chatterbox](https://github.com/resemble-ai/chatterbox) (MIT) and clones a voice from a short
-reference clip. It's in the `clone` profile, so it only starts when asked:
+The `cloner` service runs [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Apache 2.0) and clones a voice from a short
+reference clip.
+
+**Apple Silicon Macs (M1 to M4), recommended.** Docker can't use the Mac's GPU, so run the service natively instead
+(needs `brew install python@3.12 ffmpeg`):
+
+```bash
+./scripts/run-cloner-mac.sh start      # also: stop, status, logs
+printf '\nCLONE_TTS_URL=http://host.docker.internal:8890\n' >> .env   # once; the leading \n matters
+docker compose up -d narrator
+```
+
+The first start installs Qwen3-TTS into `cloner/.venv-mac-qwen` and downloads `Qwen/Qwen3-TTS-12Hz-1.7B-Base` (about
+4.5 GB) into `data/cloner/hf`. Voices are kept in `data/cloner/voices`. The service listens on port 8890 on all
+interfaces so Docker can reach it, without a password: use it on a trusted network.
+If you used the older Chatterbox engine, `./scripts/run-cloner-mac.sh cleanup` deletes what it left behind (about 5 GB).
+
+**Other machines (and Codespaces)** use the Docker add-on in the `clone` profile:
 
 ```bash
 docker compose --profile clone up -d --build
 ```
 
-- The first start downloads the model (about 2 GB) into the `cloner_models` volume. The Services panel shows
-  "Starting" until it is loaded.
-- Reference clips can be audio or video files (up to 100 MB); only the audio is kept, converted to mono 24 kHz and cut to
-  20 seconds from the chosen start point. They are stored in the `cloner_voices` volume.
-- `CLONE_MODEL=turbo` (default) uses Chatterbox Turbo: several times faster, natural tone, no Emotion control.
-  `CLONE_MODEL=standard` is slower but supports the Emotion setting. Change it in `.env`, then
-  `docker compose --profile clone up -d`. Each model downloads once.
-- `CLONE_MODEL=qwen` uses [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Apache 2.0), the most human-sounding
-  engine, through the Mac script: `CLONE_MODEL=qwen ./scripts/run-cloner-mac.sh start`. It installs into its own
-  environment (`cloner/.venv-mac-qwen`) and downloads `Qwen/Qwen3-TTS-12Hz-1.7B-Base` (about 4.5 GB) on first start.
-  Set `QWEN_MODEL=Qwen/Qwen3-TTS-12Hz-0.6B-Base` for a smaller, faster model (about 2.5 GB). It copies a voice much
-  more closely when it knows what is said in the clip: recordings made in the app fill this in with the sample text,
-  and for uploads type it in the **What is said in the clip** box (clips cut at 20 seconds skip it). No Emotion
-  control. It speaks English by default (`QWEN_LANGUAGE`; it also supports Chinese, Japanese, Korean, German, French,
-  Russian, Portuguese, Spanish and Italian, but not Albanian). Voices you already saved work with every engine.
-- Your reference clip is analysed once and reused for every sentence, and it is cleaned when saved
-  (low rumble removed, light noise reduction, level evened out).
-- **Apple Silicon Macs (M1 to M4):** Docker can't use the Mac's GPU, so cloning in Docker runs on the CPU. For much
-  faster cloning run it natively instead: `./scripts/run-cloner-mac.sh` (needs `brew install python@3.12 ffmpeg`),
-  then add `CLONE_TTS_URL=http://host.docker.internal:8890` on its own line in `.env`
-  (`printf '\nCLONE_TTS_URL=http://host.docker.internal:8890\n' >> .env`), run `docker compose stop cloner` and
-  `docker compose up -d narrator`. Record your voice again afterwards: the native service keeps voices in
-  `data/cloner/voices`, separate from the Docker volume.
-- Emotion presets (standard model only) map to Chatterbox's `exaggeration` / `cfg_weight`: Calm 0.3/0.5, Natural 0.5/0.5, Lively 0.8/0.35,
-  Dramatic 1.2/0.3.
-- It runs on the CPU by default (`CLONE_DEVICE=cpu`), which is slower than Kokoro: expect exports to take several times
-  longer. On a Linux or Windows machine with an NVIDIA GPU, set `CLONE_DEVICE=cuda` and give the service GPU access.
-- Chatterbox adds an inaudible watermark to everything it generates, so cloned speech can be identified as AI-made.
-- To always start it, add `COMPOSE_PROFILES=ollama,clone` (or just `clone`) to `.env`.
+It runs on the CPU, so it uses the smaller `Qwen/Qwen3-TTS-12Hz-0.6B-Base` model (about 2.5 GB, in the
+`cloner_models` volume) and is several times slower than the built-in voices. With an NVIDIA GPU, set
+`CLONE_DEVICE=cuda`, give the service GPU access, and you can use the 1.7B model. To always start it, add
+`COMPOSE_PROFILES=ollama,clone` (or just `clone`) to `.env`.
+
+- Reference clips can be audio or video files (up to 100 MB); only the audio is kept, converted to mono 24 kHz, cleaned
+  (low rumble removed, light noise reduction, level evened out) and cut to 20 seconds from the chosen start point.
+- **What is said in the clip:** Qwen3-TTS copies a voice much more closely when it knows the words. Recordings made in
+  the app fill this in with the sample text; for uploads, type it in. Clips cut at 20 seconds skip it, because the
+  words would no longer match. Without it the voice's timbre is still copied, less closely.
+- Each voice is analysed once and reused for every sentence; saved voices are analysed when the service starts.
+- It speaks English (`QWEN_LANGUAGE`). Qwen3-TTS also supports Chinese, Japanese, Korean, German, French, Russian,
+  Portuguese, Spanish and Italian, but not Albanian.
 
 | Variable | Where | Meaning |
 |---|---|---|

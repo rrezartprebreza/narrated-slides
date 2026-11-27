@@ -66,16 +66,18 @@ services:
       - piper_models:/models
 
   cloner:
-    # Optional: clone your own (English) voice with Chatterbox. Start with: --profile clone
-    # The first start downloads the model (~2 GB). Recordings stay in the cloner_voices volume.
+    # Optional: clone your own (English) voice with Qwen3-TTS. Start with: --profile clone
+    # The first start downloads the model. Recordings stay in the cloner_voices volume.
+    # On an Apple Silicon Mac, run ./scripts/run-cloner-mac.sh instead: it uses the Mac GPU and is much faster.
     profiles: ["clone"]
     build: ./cloner
     image: narrated-slides/cloner:local
     restart: unless-stopped
     environment:
       CLONE_DEVICE: ${CLONE_DEVICE:-cpu}
-      # turbo = fast (default); standard = slower but supports the Emotion setting
-      CLONE_MODEL: ${CLONE_MODEL:-turbo}
+      # Docker runs on the CPU, so the smaller model (~2.5 GB) is the default here.
+      # Qwen/Qwen3-TTS-12Hz-1.7B-Base sounds a little better but needs about 8 GB of memory and is slower.
+      QWEN_MODEL: ${QWEN_MODEL:-Qwen/Qwen3-TTS-12Hz-0.6B-Base}
     volumes:
       - cloner_models:/models
       - cloner_voices:/voices

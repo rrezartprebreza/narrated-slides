@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Run the voice-cloning service natively on an Apple Silicon Mac, so it can use the GPU (Metal / MPS).
-# Docker on macOS can't reach the GPU, so this is usually many times faster than the Docker version.
+# Run the voice-cloning service (Qwen3-TTS) natively on an Apple Silicon Mac, so it can use the GPU (Metal / MPS).
+# Docker on macOS can't reach the GPU, so this is many times faster than the Docker version.
 #
-#   ./scripts/run-cloner-mac.sh          # first run installs everything (a few minutes), then starts it
-#   CLONE_MODEL=qwen ./scripts/run-cloner-mac.sh start   # Qwen3-TTS: the most human-sounding engine (~4.5 GB model)
-#   CLONE_MODEL=standard ...             # Chatterbox with the Emotion setting;  default: turbo (fastest)
+#   ./scripts/run-cloner-mac.sh start    # first run installs everything and downloads the model (~4.5 GB)
+#   QWEN_MODEL=Qwen/Qwen3-TTS-12Hz-0.6B-Base ./scripts/run-cloner-mac.sh start   # smaller, faster model
+#   ./scripts/run-cloner-mac.sh cleanup  # delete what the old Chatterbox engine left behind (frees ~5 GB)
 #
 # Then, in another terminal (once):
 #   printf '\nCLONE_TTS_URL=http://host.docker.internal:8890\n' >> .env   (the leading \n matters)
@@ -18,7 +18,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Background mode:  start | stop | status | logs   (no argument = run in this window)
+# Background mode:  start | stop | status | logs | cleanup   (no argument = run in this window)
 PIDFILE="data/cloner/cloner.pid"
 LOGFILE="data/cloner/cloner.log"
 running() { [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; }
@@ -27,18 +27,18 @@ case "${1:-}" in
   start)
     if running || port_pids >/dev/null; then
       now="$(curl -s http://127.0.0.1:8890/health | sed -n 's/.*"model":"\([a-z]*\)".*/\1/p')"
-      if [[ -n "$now" && "$now" != "${CLONE_MODEL:-turbo}" ]]; then
-        echo "Switching the voice service from $now to ${CLONE_MODEL:-turbo}..."
+      if [[ -n "$now" && "$now" != "qwen" ]]; then
+        echo "Replacing the old voice service ($now) with Qwen3-TTS..."
         "$0" stop
       else
-        echo "Voice service already running${now:+ (model $now)}."; exit 0
+        echo "Voice service already running."; exit 0
       fi
     fi
     mkdir -p data/cloner
     nohup "$0" >"$LOGFILE" 2>&1 &   # a fresh log for each start
     echo $! >"$PIDFILE"
     echo "Voice service started in the background. It keeps running after you close Terminal."
-    echo "Model: ${CLONE_MODEL:-turbo}. Check it:  $0 status     Follow the log:  $0 logs     Stop it:  $0 stop"
+    echo "Check it:  $0 status     Follow the log:  $0 logs     Stop it:  $0 stop"
     exit 0 ;;
   stop)
     pids="$( { [[ -f "$PIDFILE" ]] && cat "$PIDFILE"; port_pids || true; } | sort -u | tr '\n' ' ')"
@@ -57,6 +57,14 @@ case "${1:-}" in
     exit 0 ;;
   logs)
     exec tail -n 40 -f "$LOGFILE" ;;
+  cleanup)
+    old=(cloner/.venv-mac data/cloner/hf/hub/models--ResembleAI--*)
+    found=0
+    for d in "${old[@]}"; do
+      if [[ -e "$d" ]]; then echo "Removing $d ($(du -sh "$d" | cut -f1))"; rm -rf "$d"; found=1; fi
+    done
+    [[ $found == 1 ]] && echo "Done. Your saved voices are untouched." || echo "Nothing left over from Chatterbox."
+    exit 0 ;;
 esac
 
 if [[ "$(uname -s)" != "Darwin" || "$(uname -m)" != "arm64" ]]; then
@@ -73,31 +81,14 @@ if [[ -z "$PY" ]]; then
   exit 1
 fi
 
-export CLONE_MODEL="${CLONE_MODEL:-turbo}"
-if [[ "$CLONE_MODEL" == "qwen" ]]; then
-  # Qwen3-TTS needs a different transformers version than Chatterbox, so it gets its own environment.
-  VENV="cloner/.venv-mac-qwen"
-  if [[ ! -x "$VENV/bin/uvicorn" ]] || ! "$VENV/bin/python" -c "import qwen_tts" >/dev/null 2>&1; then
-    echo "Setting up Qwen3-TTS with $PY (first time only, a few minutes)..."
-    "$PY" -m venv "$VENV"
-    "$VENV/bin/pip" install --upgrade pip
-    "$VENV/bin/pip" install fastapi "uvicorn[standard]" python-multipart qwen-tts==0.1.1
-  fi
-  command -v sox >/dev/null 2>&1 || echo "Tip: 'brew install sox' silences a harmless warning from Qwen3-TTS."
-else
-  VENV="cloner/.venv-mac"
-  if [[ ! -x "$VENV/bin/uvicorn" ]]; then
-    echo "Setting up the voice-cloning service with $PY (first time only, a few minutes)..."
-    "$PY" -m venv "$VENV"
-    "$VENV/bin/pip" install --upgrade pip
-    "$VENV/bin/pip" install -r cloner/requirements.txt chatterbox-tts==0.1.7
-  fi
-  # The watermark library (resemble-perth) imports pkg_resources, which comes from setuptools < 81.
-  if ! "$VENV/bin/python" -c "import pkg_resources" >/dev/null 2>&1; then
-    echo "Installing setuptools (needed by the watermark library)..."
-    "$VENV/bin/pip" install "setuptools<81"
-  fi
+VENV="cloner/.venv-mac-qwen"
+if [[ ! -x "$VENV/bin/uvicorn" ]] || ! "$VENV/bin/python" -c "import qwen_tts" >/dev/null 2>&1; then
+  echo "Setting up Qwen3-TTS with $PY (first time only, a few minutes)..."
+  "$PY" -m venv "$VENV"
+  "$VENV/bin/pip" install --upgrade pip
+  "$VENV/bin/pip" install -r cloner/requirements.txt qwen-tts==0.1.1
 fi
+command -v sox >/dev/null 2>&1 || echo "Tip: 'brew install sox' silences a harmless warning from Qwen3-TTS."
 command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg is needed:  brew install ffmpeg" >&2; exit 1; }
 
 mkdir -p data/cloner/voices data/cloner/hf
@@ -106,7 +97,8 @@ export HF_HOME="$PWD/data/cloner/hf"
 export CLONE_DEVICE="${CLONE_DEVICE:-mps}"
 export PYTORCH_ENABLE_MPS_FALLBACK=1   # run any operation the GPU lacks on the CPU instead of failing
 
-echo "Voice cloning on the Mac GPU ($CLONE_DEVICE, model $CLONE_MODEL) at http://127.0.0.1:8890"
+export QWEN_MODEL="${QWEN_MODEL:-Qwen/Qwen3-TTS-12Hz-1.7B-Base}"
+echo "Voice cloning (Qwen3-TTS, $QWEN_MODEL) on the Mac GPU ($CLONE_DEVICE) at http://127.0.0.1:8890"
 echo "Your voices are stored in data/cloner/voices. Keep this window open; Ctrl+C stops it."
 cd cloner
 exec "../$VENV/bin/uvicorn" app.main:app --host "${CLONE_HOST:-0.0.0.0}" --port 8890

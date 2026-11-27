@@ -47,5 +47,5 @@ jobs:
           docker build -t narrated-slides-narrator ./narrator
           docker build -t narrated-slides-piper ./piper
           docker build -t narrated-slides-cloner ./cloner
-      - name: Cloner image can load Chatterbox
-        run: docker run --rm --entrypoint python narrated-slides-cloner -c "import chatterbox.tts, chatterbox.tts_turbo, app.main; print('ok')"
+      - name: Cloner image can load Qwen3-TTS
+        run: docker run --rm --entrypoint python narrated-slides-cloner -c "from qwen_tts import Qwen3TTSModel; import app.main; print('ok')"

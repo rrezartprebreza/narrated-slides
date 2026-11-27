@@ -25,7 +25,7 @@ Browser ──HTTP──▶ narrator (FastAPI, port 8000)
 | `tts.py`, `llm.py`, `presenton.py` | Clients for the external services. Retries and clear error messages. |
 | `video.py` | FFmpeg helpers, subtitle cue splitting. |
 | `config.py` | Environment variables, read once at startup. |
-| `../../cloner/` | Optional voice-cloning service (Chatterbox) with the same OpenAI-style API plus `/voices` for reference clips. |
+| `../../cloner/` | Optional voice-cloning service (Qwen3-TTS) with the same OpenAI-style API plus `/voices` for reference clips. |
 | `../../piper/` | Separate small service: Piper TTS behind the same OpenAI-style API, for Albanian and other Piper voices. |
 | `static/` | `index.html`, `style.css`, `app.js`, `logo.svg`. |
 | `assets/sample-deck.pptx` | The sample deck offered on the home page. |

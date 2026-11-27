@@ -421,37 +421,21 @@ def _cloner_app(voices_dir):
     mod.VOICES_DIR = voices_dir
     mod.engine.start = lambda: None
 
-    class Out:
-        def __init__(self):
-            self.a = np.zeros(6000, dtype=np.float32)
-
-        def squeeze(self):
-            return self
-
-        detach = cpu = squeeze
-
-        def numpy(self):
-            return self.a
-
-    class Model:
-        sr = 24000
+    class Model:  # stands in for qwen_tts.Qwen3TTSModel
         calls = []
-        conds = None
+        transcripts = []
 
-        def prepare_conditionals(self, path, exaggeration=0.5):
-            self.conds = path
+        def create_voice_clone_prompt(self, ref_audio, ref_text=None, x_vector_only_mode=False):
+            Model.transcripts.append(ref_text)
+            return [ref_audio]
 
-        emotions = []
-
-        def generate(self, text, exaggeration=0.5, cfg_weight=0.5):
+        def generate_voice_clone(self, text, language=None, voice_clone_prompt=None, **kw):
             Model.calls.append(text)
-            Model.emotions.append((exaggeration, cfg_weight))
-            return Out()
+            return [np.zeros(6000, dtype=np.float32)], 24000
 
     mod.engine.model = Model()
-    mod.engine.kind = "standard"  # the expressive model, so emotion settings reach generate()
     voices_dir.mkdir(parents=True, exist_ok=True)
-    _cloner_app.emotions = Model.emotions
+    _cloner_app.transcripts = Model.transcripts
     return mod.app, Model.calls
 
 
@@ -471,7 +455,8 @@ def test_my_voice_clone_flow(client, deck_file, tmp_path, monkeypatch):
                           "-c:a", "libopus", "-"], capture_output=True, check=True).stdout
     r = client.post("/api/my-voices", data={"name": "Rrezart", "consent": "false"}, files={"file": ("rec.webm", rec, "audio/webm")})
     assert r.status_code == 400 and "permission" in r.json()["detail"]
-    r = client.post("/api/my-voices", data={"name": "Rrezart", "consent": "true"}, files={"file": ("rec.webm", rec, "audio/webm")})
+    r = client.post("/api/my-voices", data={"name": "Rrezart", "consent": "true", "transcript": "Hello, and welcome."},
+                    files={"file": ("rec.webm", rec, "audio/webm")})
     assert r.status_code == 200, r.text
     vid = r.json()["id"]
     assert vid == "clone_rrezart"
@@ -481,8 +466,8 @@ def test_my_voice_clone_flow(client, deck_file, tmp_path, monkeypatch):
     r = client.post("/api/tts/preview", json={"text": "Hello students. Welcome back!", "voice": vid})
     assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg"
     assert calls[-2:] == ["Hello students.", "Welcome back!"]
-    client.post("/api/tts/preview", json={"text": "Amazing!", "voice": vid, "emotion": "dramatic"})
-    assert _cloner_app.emotions[-1] == (1.2, 0.3)
+    assert _cloner_app.transcripts[-1] == "Hello, and welcome."  # the transcript reaches the cloner
+    assert client.get("/api/my-voices").json()["voices"][0]["has_transcript"] is True
 
     deck_id = upload(client, deck_file)
     job = wait(client, client.post(f"/api/decks/{deck_id}/render", json={"voice": vid, "resolution": 720}).json()["job_id"])

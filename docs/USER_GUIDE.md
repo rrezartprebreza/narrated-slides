@@ -59,8 +59,6 @@ Press **Voice & export** (top right, or step 3 in the header).
   a name, tick the permission box and save. It appears under **My voices** in every voice picker. Cloned voices speak
   English and take longer to export than the built-in voices. Only clone your own voice or one you have permission for.
   If the button says the add-on isn't started, ask whoever installed the app to run `docker compose --profile clone up -d --build`.
-- **Emotion** (only for your own voices): Calm, Natural, Lively or Dramatic. It changes how expressive the delivery is.
-  Press **Hear it** to compare; Natural suits most lectures, Lively works well for intros and summaries.
 - **Subtitles**: tick any of English, Shqip, Italiano, Português, Norsk and Türkçe. The narration's own language (marked
   *original*) is always included. The other languages are translated by the notes AI, so it must be set up (see Services).
   Each language becomes a subtitle track inside the MP4 (pick it in VLC, QuickTime or the page's player) and an SRT file

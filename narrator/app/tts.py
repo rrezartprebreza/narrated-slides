@@ -58,7 +58,7 @@ def _extra_list() -> list[str]:
 def engine_for(voice: str) -> tuple[str, str]:
     """(base_url, model) of the engine that has this voice."""
     if voice.startswith("clone_") and config.CLONE_TTS_URL:
-        return f"{config.CLONE_TTS_URL}/v1", "chatterbox"
+        return f"{config.CLONE_TTS_URL}/v1", "qwen3-tts"
     if config.EXTRA_TTS_BASE_URL:
         if voice not in _extra_voices:
             _extra_list()
@@ -67,17 +67,7 @@ def engine_for(voice: str) -> tuple[str, str]:
     return config.TTS_BASE_URL, config.TTS_MODEL
 
 
-# Emotion presets for cloned voices (Chatterbox: higher exaggeration = more expressive,
-# lower cfg_weight = slower, more deliberate delivery that suits strong emotion).
-EMOTIONS = {
-    "calm": {"exaggeration": 0.3, "cfg_weight": 0.5},
-    "natural": {"exaggeration": 0.5, "cfg_weight": 0.5},
-    "lively": {"exaggeration": 0.8, "cfg_weight": 0.35},
-    "dramatic": {"exaggeration": 1.2, "cfg_weight": 0.3},
-}
-
-
-def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "mp3", emotion: str = "natural") -> bytes:
+def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "mp3") -> bytes:
     text = clean_for_speech(text)
     if not text:
         raise TTSError("Nothing to say: the text is empty.")
@@ -90,8 +80,6 @@ def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "
         "response_format": fmt,
         "speed": speed,
     }
-    if voice.startswith("clone_"):
-        payload.update(EMOTIONS.get(emotion, EMOTIONS["natural"]))
     last: Exception | None = None
     clone = voice.startswith("clone_")
     resets = 0
@@ -180,20 +168,10 @@ def clone_healthy() -> bool | None:
 
 
 def clone_model() -> str | None:
-    """Which cloning engine is running: turbo, standard or qwen (None when it can't be reached)."""
+    """Name of the cloning engine (None when it can't be reached)."""
     if not config.CLONE_TTS_URL:
         return None
     try:
         return httpx.get(f"{config.CLONE_TTS_URL}/health", timeout=3).json().get("model")
     except Exception:
         return None
-
-
-def clone_supports_emotion() -> bool:
-    """True when the cloner runs the expressive (standard) model rather than Turbo."""
-    if not config.CLONE_TTS_URL:
-        return False
-    try:
-        return bool(httpx.get(f"{config.CLONE_TTS_URL}/health", timeout=3).json().get("emotion"))
-    except Exception:
-        return False

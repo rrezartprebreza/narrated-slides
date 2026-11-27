@@ -38,7 +38,6 @@ class PreviewRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1500)
     voice: str | None = None
     speed: float = Field(1.0, ge=0.5, le=2.0)
-    emotion: Literal["calm", "natural", "lively", "dramatic"] = "natural"
 
 
 class GenerateRequest(BaseModel):
@@ -71,7 +70,6 @@ class RenderRequest(BaseModel):
     pause: float = Field(0.8, ge=0, le=5)
     silent_seconds: float = Field(3.0, ge=0.5, le=30)
     resolution: Literal[720, 1080] = 1080
-    emotion: Literal["calm", "natural", "lively", "dramatic"] = "natural"
     subtitle_languages: list[Literal["en", "sq", "it", "pt", "no", "tr"]] = Field(default_factory=list, max_length=6)
 
 
@@ -115,7 +113,6 @@ def health():
         "tts": tts.healthy(),
         "extra_tts": tts.extra_healthy(),
         "clone": tts.clone_healthy(),
-        "clone_emotion": tts.clone_supports_emotion(),
         "clone_model": tts.clone_model(),
         "clone_native": "host.docker.internal" in config.CLONE_TTS_URL,
         "default_voice": config.TTS_VOICE,
@@ -136,7 +133,7 @@ def get_voices():
 @app.post("/api/tts/preview")
 def tts_preview(req: PreviewRequest):
     try:
-        audio = tts.speech(req.text, req.voice, req.speed, "mp3", req.emotion)
+        audio = tts.speech(req.text, req.voice, req.speed, "mp3")
     except tts.TTSError as exc:
         raise HTTPException(502, str(exc))
     return Response(audio, media_type="audio/mpeg")

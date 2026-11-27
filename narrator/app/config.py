@@ -21,7 +21,7 @@ TTS_API_KEY = _env("TTS_API_KEY", "not-needed")
 EXTRA_TTS_BASE_URL = _env("EXTRA_TTS_BASE_URL", "").rstrip("/")
 EXTRA_TTS_MODEL = _env("EXTRA_TTS_MODEL", "piper")
 
-# Optional voice-cloning service (Chatterbox). Its voices are named clone_<name>.
+# Optional voice-cloning service (Qwen3-TTS). Its voices are named clone_<name>.
 CLONE_TTS_URL = _env("CLONE_TTS_URL", "").rstrip("/")
 
 # Optional: an OpenAI-compatible chat endpoint used to write missing speaker notes

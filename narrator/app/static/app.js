@@ -143,8 +143,7 @@ function voiceSelect(id) {
 }
 
 // ---------- state ----------
-const DEFAULTS = { voice: "", speed: 1, pause: 0.8, silent: 3, res: 1080, subs: [], emotion: "natural" };
-const EMOTIONS = [["calm", "Calm"], ["natural", "Natural"], ["lively", "Lively"], ["dramatic", "Dramatic"]];
+const DEFAULTS = { voice: "", speed: 1, pause: 0.8, silent: 3, res: 1080, subs: [] };
 const SUB_LANGS = [["en", "English"], ["sq", "Shqip"], ["it", "Italiano"], ["pt", "Português"], ["no", "Norsk"], ["tr", "Türkçe"]];
 function voiceLangCode(v) {
   if (isAlbanian(v)) return "sq";
@@ -255,8 +254,8 @@ async function openStatus() {
       : hl.clone == null
       ? serviceRow("warn", "Voice cloning", "optional", "Not started. Clone your own English voice from a short recording.", "docker compose --profile clone up -d --build")
       : hl.clone
-        ? serviceRow("ok", "Voice cloning", "optional", `Ready (${({ qwen: "Qwen3-TTS, most natural", standard: "Chatterbox with emotion", turbo: "Chatterbox Turbo" })[hl.clone_model] || "running"}). Add your voice under Voice & export, My voice.`)
-        : serviceRow("warn", "Voice cloning", "optional", "Starting. The first start downloads the model (about 2 GB), which takes a few minutes.", "docker compose logs cloner"),
+        ? serviceRow("ok", "Voice cloning", "optional", "Ready. Add your voice under Voice & export, My voice.")
+        : serviceRow("warn", "Voice cloning", "optional", "Starting. The first start downloads the model (2.5 to 4.5 GB), which takes a few minutes.", "docker compose logs cloner"),
     !hl.llm_configured
       ? serviceRow("warn", "Notes AI", "optional", "Not set up. It drafts notes for slides that have none; everything else works without it.", "docker compose --profile ollama up -d\n# then set NOTES_LLM_BASE_URL and NOTES_LLM_MODEL in .env")
       : hl.llm
@@ -470,7 +469,7 @@ async function playPreview(text, btn, labels) {
   try {
     const res = await api("/api/tts/preview", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text.slice(0, limit), voice: S.settings.voice || null, speed: Number(S.settings.speed) || 1, emotion: S.settings.emotion || "natural" }),
+      body: JSON.stringify({ text: text.slice(0, limit), voice: S.settings.voice || null, speed: Number(S.settings.speed) || 1 }),
     });
     const url = URL.createObjectURL(await res.blob());
     if (!btn.dataset.loading) { URL.revokeObjectURL(url); return; } // cancelled while loading
@@ -701,33 +700,12 @@ function renderExport() {
       h("div", { class: "field wide" }, h("label", { for: "voice" }, "Voice"),
         h("div", { class: "row-inline" }, voiceSel, sampleBtn,
           h("button", { class: "btn sm", type: "button", onclick: openMyVoices }, icon("mic"), "My voice"))),
-      emotionField(),
       h("div", { class: "field wide" }, h("label", { for: "speed" }, "Speaking speed ", speedVal), speed),
       h("label", { class: "field" }, "Pause after each slide (seconds)", pause),
       h("label", { class: "field" }, "Silent slide length (seconds)", silent),
       h("div", { class: "field wide" }, "Video size", resSeg),
       subsField()));
 
-  function emotionField() {
-    const seg = h("div", { class: "seg", role: "radiogroup", "aria-label": "Emotion" }, EMOTIONS.map(([val, label]) => {
-      const input = h("input", { type: "radio", name: "emotion", value: val, checked: (st.emotion || "natural") === val });
-      input.addEventListener("change", () => { st.emotion = val; persist(); });
-      return h("label", {}, input, h("span", {}, label));
-    }));
-    const note = h("p", { class: "sub-note" });
-    const wrap = h("div", { class: "field wide" }, "Emotion", seg, note);
-    const sync = () => {
-      wrap.hidden = !isClone(st.voice);
-      const ok = !!S.health?.clone_emotion;
-      seg.querySelectorAll("input").forEach((i) => { i.disabled = !ok; });
-      note.textContent = ok
-        ? "For your own voices: how expressive the delivery is. Press Hear it to compare."
-        : "Your own voices use the fast model, which speaks in your natural tone. For Emotion, switch to the expressive (slower) model: set CLONE_MODEL=standard in .env.";
-    };
-    sync();
-    onVoiceChange(wrap, sync);
-    return wrap;
-  }
 
   function subsField() {
     const wrap = h("div", { class: "field wide" });
@@ -794,7 +772,6 @@ function renderExport() {
       await flushSave();
       const { job_id } = await sendJSON(`/api/decks/${d.id}/render`, "POST", {
         notes: S.notes, voice: st.voice || null, speed: Number(st.speed), pause: Number(st.pause), silent_seconds: Number(st.silent), resolution: Number(st.res),
-        emotion: st.emotion || "natural",
         subtitle_languages: (st.subs || []).filter((c) => c === voiceLangCode(st.voice) || S.health?.llm_configured),
       });
       const res = await runJob(job_id, (j) => { bar.style.width = Math.round(j.progress * 100) + "%"; pct.textContent = Math.round(j.progress * 100) + "%"; stepEl.textContent = j.step; });
@@ -910,7 +887,7 @@ async function openMyVoices() {
   if (hl.clone == null) {
     body.replaceChildren(
       h("p", {}, "Voice cloning makes narration in your own voice from about 10 seconds of English speech. It runs on this computer, and your recording never leaves it."),
-      h("p", { class: "muted", style: "margin-top:10px" }, "It is an optional add-on. Start it once in Terminal, in the narrated-slides folder. The first start downloads the model (about 2 GB):"),
+      h("p", { class: "muted", style: "margin-top:10px" }, "It is an optional add-on. Start it once in Terminal, in the narrated-slides folder. The first start downloads the model (2.5 GB in Docker):"),
       h("pre", { class: "codeblock" }, "docker compose --profile clone up -d --build"),
       h("p", { class: "muted" }, "On an Apple Silicon Mac, it's much faster on the Mac's GPU: run ./scripts/run-cloner-mac.sh, and add CLONE_TTS_URL=http://host.docker.internal:8890 to .env on its own line, then docker compose up -d narrator."),
       h("p", { class: "muted" }, "Then reopen this window."));
@@ -935,7 +912,7 @@ async function openMyVoices() {
     return h("li", {}, h("span", { class: "myv-ico" }, icon("mic")),
       h("span", { class: "myv-name" }, h("strong", {}, v.name), h("small", {}, `${v.seconds} s sample` + (v.has_transcript ? " · with transcript" : ""))), use, del);
   }));
-  const status = hl.clone ? null : h("div", { class: "warn-box" }, "The cloning model is still loading (first start downloads about 2 GB). You can add your voice now; it will speak once the model is ready.");
+  const status = hl.clone ? null : h("div", { class: "warn-box" }, "The cloning model is still loading (the first start downloads it). You can add your voice now; it will speak once the model is ready.");
 
   // --- add form ---
   let blob = null, blobName = "recording.webm";
@@ -950,10 +927,8 @@ async function openMyVoices() {
   let player = h("audio", { controls: true, hidden: true, class: "myv-player" });
   const transcriptIn = h("textarea", { rows: "2", maxlength: "1000", id: "myv-transcript",
     placeholder: "Type exactly what is said in the clip" });
-  const qwen = hl.clone_model === "qwen";
   const transcriptField = h("label", { class: "field", style: "margin-top:12px" },
-    qwen ? "What is said in the clip (makes the copy of your voice much closer)"
-         : "What is said in the clip (optional; used by the Qwen engine)", transcriptIn);
+    "What is said in the clip (makes the copy of your voice much closer)", transcriptIn);
   const consent = h("input", { type: "checkbox", id: "myv-consent" });
   const save = h("button", { class: "btn primary", type: "button", disabled: true }, icon("check"), "Save voice");
   const err = h("p", { class: "error", hidden: true });

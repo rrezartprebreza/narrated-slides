@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.7.0 (2026-11-27)
+
+- Qwen3-TTS is now the only voice-cloning engine; Chatterbox and the Emotion setting are removed.
+  On an Apple Silicon Mac: `./scripts/run-cloner-mac.sh start` (Mac GPU, 1.7B model). The Docker add-on runs Qwen3-TTS
+  on the CPU with the smaller 0.6B model (`QWEN_MODEL` to change). Saved voices keep working.
+- `./scripts/run-cloner-mac.sh cleanup` deletes what Chatterbox left behind (about 5 GB). `stop` also stops a service
+  started from another Terminal window.
+
 ## v1.6.0 (2026-11-27)
 
 - Qwen3-TTS voice cloning, the most human-sounding engine: `CLONE_MODEL=qwen ./scripts/run-cloner-mac.sh start` on an

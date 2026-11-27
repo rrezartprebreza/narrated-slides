@@ -1,6 +1,6 @@
-# Versions left open: chatterbox-tts pulls in gradio, which needs an older FastAPI/Starlette.
+# Service + tests. The model library (qwen-tts, which brings PyTorch) is installed by the Dockerfile and by
+# scripts/run-cloner-mac.sh, so the tests run without it.
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
-numpy<2.0.0,>=1.24.0
-setuptools<81   # resemble-perth (Chatterbox's watermark) imports pkg_resources
+numpy

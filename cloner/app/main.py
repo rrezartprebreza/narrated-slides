@@ -1,14 +1,12 @@
-"""Voice cloning behind the same OpenAI-style API as the other voice engines.
+"""Voice cloning with Qwen3-TTS (Apache 2.0), behind the same OpenAI-style API as the other voice engines.
 
-Engines (CLONE_MODEL): "turbo" and "standard" (Chatterbox, MIT) or "qwen" (Qwen3-TTS Base, Apache 2.0; most human
-sounding, best with a transcript of the reference clip).
-
-- POST /voices        upload a short reference clip (multipart: name, consent=true, file) -> new voice "clone_<slug>"
+- POST /voices        upload a short reference clip (multipart: name, consent=true, file, optional start and transcript)
+                      -> new voice "clone_<slug>". The transcript (what is said in the clip) gives a much closer copy.
 - GET  /voices        list saved voices with details
 - DELETE /voices/{id} delete a voice and its clip
 - GET  /v1/audio/voices, POST /v1/audio/speech   used by Narrated Slides like any other engine
 
-The model (~2 GB) is downloaded once into HF_HOME on first start and loaded in the background.
+The model is downloaded once into HF_HOME on first start and loaded in the background.
 """
 from __future__ import annotations
 
@@ -28,12 +26,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 VOICES_DIR = Path(os.environ.get("VOICES_DIR", "/voices"))
-DEVICE = os.environ.get("CLONE_DEVICE", "cpu")
-# turbo: much faster, no emotion control. standard: slower, supports the Emotion setting.
-# qwen: Qwen3-TTS, the most natural sounding (needs its own install, see scripts/run-cloner-mac.sh).
-MODEL_KIND = os.environ.get("CLONE_MODEL", "turbo").strip().lower()
-if MODEL_KIND not in ("turbo", "standard", "qwen"):
-    MODEL_KIND = "turbo"
+DEVICE = os.environ.get("CLONE_DEVICE", "cpu")  # mps on Apple Silicon (scripts/run-cloner-mac.sh), cuda with an NVIDIA GPU
 QWEN_MODEL = os.environ.get("QWEN_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-Base")
 QWEN_LANGUAGE = os.environ.get("QWEN_LANGUAGE", "English")
 MAX_CLIP = 20.0  # seconds kept from an upload
@@ -42,71 +35,50 @@ MEDIA = {"mp3": "audio/mpeg", "wav": "audio/wav"}
 
 
 class Engine:
+    kind = "qwen"
+
     def __init__(self) -> None:
         self.model = None
-        self.kind = MODEL_KIND
+        self.sr = 24000
         self.error: str | None = None
         self.lock = threading.Lock()
-        self.conds: dict[tuple[str, float], object] = {}  # analysed reference clips, reused across sentences
+        self.prompts: dict[tuple[str, float], object] = {}  # analysed reference clips, reused across sentences
 
     def start(self) -> None:
         threading.Thread(target=self._load, daemon=True).start()
 
     def _load(self) -> None:
-        if self.kind == "qwen":
-            return self._load_qwen()
         try:
-            import perth
             import torch
+            from qwen_tts import Qwen3TTSModel
 
-            if perth.PerthImplicitWatermarker is None:
-                raise RuntimeError("the watermark library could not load; install it with: pip install 'setuptools<81'")
             torch.set_num_threads(max(1, os.cpu_count() or 4))
-            if self.kind == "turbo":
-                from chatterbox.tts_turbo import ChatterboxTurboTTS as Model
-            else:
-                from chatterbox.tts import ChatterboxTTS as Model
-
-            print(f"[cloner] loading Chatterbox {self.kind} (first start downloads the model)…", flush=True)
-            self.model = Model.from_pretrained(device=DEVICE)
-            print(f"[cloner] model ready ({self.kind}, {torch.get_num_threads()} CPU threads)", flush=True)
+            # bfloat16 on NVIDIA; float32 elsewhere (half precision makes the clone model produce NaNs on the Mac GPU)
+            dtype = torch.bfloat16 if DEVICE.startswith("cuda") else torch.float32
+            print(f"[cloner] loading Qwen3-TTS {QWEN_MODEL} on {DEVICE} (first start downloads the model)…", flush=True)
+            self.model = Qwen3TTSModel.from_pretrained(QWEN_MODEL, device_map=DEVICE, dtype=dtype)
+            print(f"[cloner] model ready (qwen, {DEVICE})", flush=True)
             for meta in voice_meta():  # analyse saved voices now, so the first preview doesn't wait
                 self.warm(VOICES_DIR / f"{meta['id']}.wav")
         except Exception as exc:
             self.error = f"{type(exc).__name__}: {exc}"[:400]
             print(f"[cloner] model failed to load: {self.error}", flush=True)
 
-    def _load_qwen(self) -> None:
-        try:
-            import torch
-            from qwen_tts import Qwen3TTSModel
-
-            torch.set_num_threads(max(1, os.cpu_count() or 4))
-            # float32 on the Mac GPU: half precision makes the clone model produce NaNs there.
-            dtype = torch.bfloat16 if DEVICE.startswith("cuda") else torch.float32
-            print(f"[cloner] loading Qwen3-TTS {QWEN_MODEL} on {DEVICE} (first start downloads the model)…", flush=True)
-            self.model = Qwen3TTSModel.from_pretrained(QWEN_MODEL, device_map=DEVICE, dtype=dtype)
-            self.model.sr = 24000
-            print(f"[cloner] model ready (qwen, {DEVICE})", flush=True)
-            for meta in voice_meta():
-                self.warm(VOICES_DIR / f"{meta['id']}.wav")
-        except Exception as exc:
-            self.error = f"{type(exc).__name__}: {exc}"[:400]
-            print(f"[cloner] model failed to load: {self.error}", flush=True)
-
-    def _qwen_prompt(self, ref: Path):
-        """Build (once) the Qwen voice prompt. With a transcript it copies the voice far more closely."""
+    def _prompt(self, ref: Path):
+        """Build the voice prompt once per clip (call with self.lock held)."""
         key = (str(ref), ref.stat().st_mtime)
-        if key not in self.conds:
+        if key not in self.prompts:
             transcript = (voice_info(ref.stem).get("transcript") or "").strip()
             if transcript:
                 prompt = self.model.create_voice_clone_prompt(ref_audio=str(ref), ref_text=transcript)
-            else:
+            else:  # without the words, only the speaker's timbre is used
                 prompt = self.model.create_voice_clone_prompt(ref_audio=str(ref), x_vector_only_mode=True)
-            self.conds[key] = prompt
-        return self.conds[key]
+            self.prompts[key] = prompt
+        return self.prompts[key]
 
-    def _qwen_say(self, chunk: str, prompt):
+    def _say(self, chunk: str, prompt):
+        import numpy as np
+
         try:
             wavs, sr = self.model.generate_voice_clone(text=chunk, language=QWEN_LANGUAGE, voice_clone_prompt=prompt)
         except RuntimeError as exc:
@@ -115,57 +87,38 @@ class Engine:
             # sampling broke (NaN); greedy decoding still gives good speech
             wavs, sr = self.model.generate_voice_clone(text=chunk, language=QWEN_LANGUAGE, voice_clone_prompt=prompt,
                                                        do_sample=False)
-        self.model.sr = sr
-        import numpy as np
+        self.sr = sr
         return np.asarray(wavs[0], dtype=np.float32).reshape(-1)
-
-    def _prepare(self, ref: Path, exaggeration: float = 0.5) -> None:
-        """Analyse a reference clip once and keep the result (call with self.lock held)."""
-        key = (str(ref), ref.stat().st_mtime)
-        if key not in self.conds:
-            if self.kind == "turbo":
-                self.model.prepare_conditionals(str(ref))
-            else:
-                self.model.prepare_conditionals(str(ref), exaggeration=exaggeration)
-            self.conds[key] = self.model.conds
-        self.model.conds = self.conds[key]
 
     def warm(self, ref: Path) -> None:
         if self.model is None or not ref.exists():
             return
         try:
             with self.lock:
-                self._qwen_prompt(ref) if self.kind == "qwen" else self._prepare(ref)
+                self._prompt(ref)
         except Exception as exc:
             print(f"[cloner] could not prepare {ref.name}: {exc}", flush=True)
 
-    def wav(self, text: str, ref: Path, exaggeration: float = 0.5, cfg_weight: float = 0.5) -> bytes:
+    def forget(self, voice_id: str) -> None:
+        self.prompts = {k: v for k, v in self.prompts.items() if not k[0].endswith(f"/{voice_id}.wav")}
+
+    def wav(self, text: str, ref: Path) -> bytes:
         """Generate sentence by sentence (long inputs make the model drift) and join as 16-bit WAV."""
         import numpy as np
 
-        chunks = split_text(text)
         pieces = []
         with self.lock:
-            # Analysing the reference clip is slow: do it once per voice (and file version), not per sentence.
-            prompt = self._qwen_prompt(ref) if self.kind == "qwen" else self._prepare(ref, exaggeration)
-            for chunk in chunks:
-                if self.kind == "qwen":
-                    pieces.append(self._qwen_say(chunk, prompt))
-                    pieces.append(np.zeros(int(self.model.sr * 0.25), dtype=np.float32))
-                    continue
-                if self.kind == "turbo":
-                    out = self.model.generate(chunk)
-                else:
-                    out = self.model.generate(chunk, exaggeration=exaggeration, cfg_weight=cfg_weight)
-                pieces.append(out.squeeze().detach().cpu().numpy())
-                pieces.append(np.zeros(int(self.model.sr * 0.25), dtype=np.float32))
+            prompt = self._prompt(ref)
+            for chunk in split_text(text):
+                pieces.append(self._say(chunk, prompt))
+                pieces.append(np.zeros(int(self.sr * 0.25), dtype=np.float32))
         audio = np.concatenate(pieces) if pieces else np.zeros(1, dtype=np.float32)
         pcm = (np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes()
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
             wf.setnchannels(1)
             wf.setsampwidth(2)
-            wf.setframerate(self.model.sr)
+            wf.setframerate(self.sr)
             wf.writeframes(pcm)
         return buf.getvalue()
 
@@ -228,7 +181,7 @@ def ffmpeg(args: list[str], data: bytes | None = None) -> bytes:
 
 
 engine = Engine()
-app = FastAPI(title="Voice cloning (Chatterbox or Qwen3-TTS, OpenAI-compatible)")
+app = FastAPI(title="Voice cloning (Qwen3-TTS, OpenAI-compatible)")
 
 
 @app.on_event("startup")
@@ -246,7 +199,7 @@ def live():
 def health():
     body = {"status": "ready" if engine.model else ("error" if engine.error else "loading"),
             "error": engine.error, "voices": len(voice_meta()), "model": engine.kind,
-            "emotion": engine.kind == "standard", "transcript": engine.kind == "qwen"}
+            "transcript": True}
     return body if engine.model else JSONResponse(body, status_code=503)
 
 
@@ -299,7 +252,7 @@ def delete_voice(voice_id: str):
         raise HTTPException(404, "Unknown voice.")
     for ext in (".wav", ".json"):
         (VOICES_DIR / f"{voice_id}{ext}").unlink(missing_ok=True)
-    engine.conds = {k: v for k, v in engine.conds.items() if not k[0].endswith(f"/{voice_id}.wav")}
+    engine.forget(voice_id)
     return {"ok": True}
 
 
@@ -314,8 +267,6 @@ class SpeechRequest(BaseModel):
     model: str | None = None
     speed: float = 1.0
     response_format: str = "mp3"
-    exaggeration: float = Field(0.5, ge=0.25, le=2.0)  # emotion: 0.3 calm ... 1.2+ dramatic
-    cfg_weight: float = Field(0.5, ge=0.0, le=1.0)
 
 
 @app.post("/v1/audio/speech")
@@ -327,7 +278,7 @@ def speech(req: SpeechRequest):
         raise HTTPException(400, f"Unknown voice '{req.voice}'.")
     if engine.model is None:
         raise HTTPException(503, engine.error or "The voice-cloning model is still loading. Try again in a minute.")
-    audio = engine.wav(req.input, ref, req.exaggeration, req.cfg_weight)
+    audio = engine.wav(req.input, ref)
     speed = max(0.5, min(2.0, req.speed))
     filters = [] if abs(speed - 1.0) < 0.01 else ["-af", f"atempo={speed}"]
     if req.response_format == "mp3":
