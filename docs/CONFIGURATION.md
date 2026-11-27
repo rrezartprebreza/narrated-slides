@@ -127,7 +127,8 @@ docker compose --profile clone up -d --build
   (low rumble removed, light noise reduction, level evened out).
 - **Apple Silicon Macs (M1 to M4):** Docker can't use the Mac's GPU, so cloning in Docker runs on the CPU. For much
   faster cloning run it natively instead: `./scripts/run-cloner-mac.sh` (needs `brew install python@3.12 ffmpeg`),
-  then add `CLONE_TTS_URL=http://host.docker.internal:8890` to `.env`, run `docker compose stop cloner` and
+  then add `CLONE_TTS_URL=http://host.docker.internal:8890` on its own line in `.env`
+  (`printf '\nCLONE_TTS_URL=http://host.docker.internal:8890\n' >> .env`), run `docker compose stop cloner` and
   `docker compose up -d narrator`. Record your voice again afterwards: the native service keeps voices in
   `data/cloner/voices`, separate from the Docker volume.
 - Emotion presets (standard model only) map to Chatterbox's `exaggeration` / `cfg_weight`: Calm 0.3/0.5, Natural 0.5/0.5, Lively 0.8/0.35,

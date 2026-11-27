@@ -5,7 +5,7 @@
 #   ./scripts/run-cloner-mac.sh          # first run installs everything (a few minutes), then starts it
 #
 # Then, in another terminal (once):
-#   echo "CLONE_TTS_URL=http://host.docker.internal:8890" >> .env
+#   printf '\nCLONE_TTS_URL=http://host.docker.internal:8890\n' >> .env   (the leading \n matters)
 #   docker compose stop cloner            # the Docker version is no longer needed
 #   docker compose up -d narrator
 #

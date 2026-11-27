@@ -902,6 +902,7 @@ async function openMyVoices() {
       h("p", {}, "Voice cloning makes narration in your own voice from about 10 seconds of English speech. It runs on this computer, and your recording never leaves it."),
       h("p", { class: "muted", style: "margin-top:10px" }, "It is an optional add-on. Start it once in Terminal, in the narrated-slides folder. The first start downloads the model (about 2 GB):"),
       h("pre", { class: "codeblock" }, "docker compose --profile clone up -d --build"),
+      h("p", { class: "muted" }, "On an Apple Silicon Mac, it's much faster on the Mac's GPU: run ./scripts/run-cloner-mac.sh, and add CLONE_TTS_URL=http://host.docker.internal:8890 to .env on its own line, then docker compose up -d narrator."),
       h("p", { class: "muted" }, "Then reopen this window."));
     return;
   }
