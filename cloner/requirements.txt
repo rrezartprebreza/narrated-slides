@@ -1,4 +1,5 @@
-fastapi==0.165.0
-uvicorn==0.54.0
-python-multipart==0.0.32
+# Versions left open: chatterbox-tts pulls in gradio, which needs an older FastAPI/Starlette.
+fastapi
+uvicorn
+python-multipart
 numpy<2.0.0,>=1.24.0
