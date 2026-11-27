@@ -9,7 +9,17 @@ if ! flock -n 9; then
   exit 0
 fi
 for i in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 2; done
-docker compose up -d --build
+if ! docker compose up -d --build; then
+  echo "First attempt failed; removing leftover containers and trying again..."
+  docker compose down --remove-orphans >/dev/null 2>&1
+  docker rm -f $(docker ps -aq --filter name=narrated-slides) >/dev/null 2>&1
+  docker network prune -f >/dev/null 2>&1
+  if ! docker compose up -d; then
+    echo
+    echo "Narrated Slides could not start. Paste the error above when asking for help."
+    exit 1
+  fi
+fi
 ( for i in $(seq 1 60); do
     docker compose exec -T ollama ollama list >/dev/null 2>&1 && break; sleep 5
   done
