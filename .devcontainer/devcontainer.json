@@ -2,10 +2,8 @@
   // Run Narrated Slides in GitHub Codespaces: everything starts by itself.
   // Pick a 4-core / 16 GB machine or bigger (voice cloning needs the memory).
   "name": "Narrated Slides",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
-  "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
-  },
+  // GitHub's default Codespaces image: Docker is already installed and running.
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
   "hostRequirements": {
     "cpus": 4,
     "memory": "16gb",

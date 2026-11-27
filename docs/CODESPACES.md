@@ -31,6 +31,9 @@ Later starts are much faster, because the downloads are kept while the codespace
 
 ## Troubleshooting
 
+- **`docker: command not found`:** the codespace started in recovery mode (its setup failed). Press **F1**, run
+  **Codespaces: Rebuild Container**, and wait. If it happens again, run **Codespaces: View Creation Log** and look for the error.
+
 - **Page doesn't open / 502:** the app is still starting. Run `docker compose ps` in the terminal and wait until
   `narrator` is `healthy`.
 - **"Voice cloning" stays amber:** the cloning model is still downloading. `docker compose logs -f cloner` prints
