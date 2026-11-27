@@ -30,7 +30,7 @@ services:
       NOTES_LLM_API_KEY: ${NOTES_LLM_API_KEY:-not-needed}
       # Optional: lets the narrator app generate decks through Presenton's API
       PRESENTON_URL: http://presenton:80
-      PRESENTON_PUBLIC_URL: http://localhost:${PRESENTON_PORT:-5001}
+      PRESENTON_PUBLIC_URL: ${PRESENTON_PUBLIC_URL:-http://localhost:${PRESENTON_PORT:-5001}}
       PRESENTON_API_KEY: ${PRESENTON_API_KEY:-}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
       RETENTION_DAYS: ${RETENTION_DAYS:-7}

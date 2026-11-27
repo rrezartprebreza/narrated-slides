@@ -44,6 +44,17 @@ No account, no cloud, no per-minute fees.
   <img src="docs/images/04-result.png" alt="Finished video and downloads" width="49%">
 </p>
 
+## Run it in the cloud (GitHub Codespaces)
+
+No Docker on your computer, or not enough memory? Open it in a codespace and everything starts by itself:
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/rrezartprebreza/narrated-slides?quickstart=1)
+
+Choose a **4-core / 16 GB** machine (or bigger). The first start downloads several GB, so give it 10 to 15 minutes, then
+open the **PORTS** tab and click the globe next to port **8000**. Recording your voice works there too, because the page
+runs in your own browser. Codespaces use your GitHub free monthly hours, and your files are on GitHub's servers while
+the codespace exists. Stop the codespace when you're done. Details: [docs/CODESPACES.md](docs/CODESPACES.md).
+
 ## Quick start
 
 You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine with the Compose plugin).
@@ -103,6 +114,7 @@ More detail: [User guide](docs/USER_GUIDE.md) · [Configuration](docs/CONFIGURAT
 | | |
 |---|---|
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Step by step for people using the app, including how to change a slide's look |
+| [docs/CODESPACES.md](docs/CODESPACES.md) | Run it in the cloud with GitHub Codespaces |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every setting, GPU, other voice engines, using OpenAI instead of Ollama |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Red status lights, port conflicts, slow first start, odd-looking slides |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | For contributors: components, API, data layout |

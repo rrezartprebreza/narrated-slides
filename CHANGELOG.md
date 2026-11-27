@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.4.1 (2026-11-27)
+
+- Run in GitHub Codespaces: `.devcontainer/` starts every service automatically (needs a 16 GB machine).
+- Clearer errors when a voice service runs out of memory, and when an uploaded clip has no sound.
+
 ## v1.4.0 (2026-11-27)
 
 - Emotion for your own voices: Calm, Natural, Lively or Dramatic (Chatterbox expressiveness), in previews and exports.

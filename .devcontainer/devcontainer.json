@@ -1,0 +1,22 @@
+{
+  // Run Narrated Slides in GitHub Codespaces: everything starts by itself.
+  // Pick a 4-core / 16 GB machine or bigger (voice cloning needs the memory).
+  "name": "Narrated Slides",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "64gb"
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "bash .devcontainer/start.sh",
+  "forwardPorts": [8000, 5001],
+  "portsAttributes": {
+    "8000": { "label": "Narrated Slides", "onAutoForward": "openBrowser" },
+    "5001": { "label": "Presenton", "onAutoForward": "silent" }
+  },
+  "otherPortsAttributes": { "onAutoForward": "ignore" }
+}
