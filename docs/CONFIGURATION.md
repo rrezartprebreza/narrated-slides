@@ -123,6 +123,14 @@ docker compose --profile clone up -d --build
 - `CLONE_MODEL=turbo` (default) uses Chatterbox Turbo: several times faster, natural tone, no Emotion control.
   `CLONE_MODEL=standard` is slower but supports the Emotion setting. Change it in `.env`, then
   `docker compose --profile clone up -d`. Each model downloads once.
+- `CLONE_MODEL=qwen` uses [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Apache 2.0), the most human-sounding
+  engine, through the Mac script: `CLONE_MODEL=qwen ./scripts/run-cloner-mac.sh start`. It installs into its own
+  environment (`cloner/.venv-mac-qwen`) and downloads `Qwen/Qwen3-TTS-12Hz-1.7B-Base` (about 4.5 GB) on first start.
+  Set `QWEN_MODEL=Qwen/Qwen3-TTS-12Hz-0.6B-Base` for a smaller, faster model (about 2.5 GB). It copies a voice much
+  more closely when it knows what is said in the clip: recordings made in the app fill this in with the sample text,
+  and for uploads type it in the **What is said in the clip** box (clips cut at 20 seconds skip it). No Emotion
+  control. It speaks English by default (`QWEN_LANGUAGE`; it also supports Chinese, Japanese, Korean, German, French,
+  Russian, Portuguese, Spanish and Italian, but not Albanian). Voices you already saved work with every engine.
 - Your reference clip is analysed once and reused for every sentence, and it is cleaned when saved
   (low rumble removed, light noise reduction, level evened out).
 - **Apple Silicon Macs (M1 to M4):** Docker can't use the Mac's GPU, so cloning in Docker runs on the CPU. For much

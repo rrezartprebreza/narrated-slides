@@ -179,6 +179,16 @@ def clone_healthy() -> bool | None:
         return False
 
 
+def clone_model() -> str | None:
+    """Which cloning engine is running: turbo, standard or qwen (None when it can't be reached)."""
+    if not config.CLONE_TTS_URL:
+        return None
+    try:
+        return httpx.get(f"{config.CLONE_TTS_URL}/health", timeout=3).json().get("model")
+    except Exception:
+        return None
+
+
 def clone_supports_emotion() -> bool:
     """True when the cloner runs the expressive (standard) model rather than Turbo."""
     if not config.CLONE_TTS_URL:

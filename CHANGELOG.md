@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.6.0 (2026-11-27)
+
+- Qwen3-TTS voice cloning, the most human-sounding engine: `CLONE_MODEL=qwen ./scripts/run-cloner-mac.sh start` on an
+  Apple Silicon Mac (own environment, Mac GPU, about 4.5 GB model; `QWEN_MODEL` picks the smaller 0.6B model).
+- My voices: a **What is said in the clip** box, filled in automatically for recordings, so Qwen3-TTS can copy the
+  voice more closely. The Services panel shows which cloning engine is running.
+
 ## v1.5.0 (2026-11-27)
 
 - `scripts/run-cloner-mac.sh`: run voice cloning natively on Apple Silicon to use the GPU (MPS); point the app at it

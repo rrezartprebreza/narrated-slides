@@ -116,6 +116,7 @@ def health():
         "extra_tts": tts.extra_healthy(),
         "clone": tts.clone_healthy(),
         "clone_emotion": tts.clone_supports_emotion(),
+        "clone_model": tts.clone_model(),
         "clone_native": "host.docker.internal" in config.CLONE_TTS_URL,
         "default_voice": config.TTS_VOICE,
         "llm_configured": llm.configured(),
@@ -295,9 +296,10 @@ def my_voices():
 
 @app.post("/api/my-voices")
 async def add_my_voice(name: str = Form(...), consent: bool = Form(False), file: UploadFile = File(...),
-                       start: float = Form(0.0, ge=0, le=3600)):
+                       start: float = Form(0.0, ge=0, le=3600), transcript: str = Form("", max_length=1000)):
     data = await file.read()
-    return _clone_call("POST", "/voices", data={"name": name, "consent": str(consent).lower(), "start": str(start)},
+    return _clone_call("POST", "/voices", data={"name": name, "consent": str(consent).lower(), "start": str(start),
+                                                "transcript": transcript},
                        files={"file": (file.filename or "clip.webm", data, file.content_type or "application/octet-stream")})
 
 

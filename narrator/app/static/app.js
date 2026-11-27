@@ -255,7 +255,7 @@ async function openStatus() {
       : hl.clone == null
       ? serviceRow("warn", "Voice cloning", "optional", "Not started. Clone your own English voice from a short recording.", "docker compose --profile clone up -d --build")
       : hl.clone
-        ? serviceRow("ok", "Voice cloning", "optional", "Ready. Add your voice under Voice & export, My voice.")
+        ? serviceRow("ok", "Voice cloning", "optional", `Ready (${({ qwen: "Qwen3-TTS, most natural", standard: "Chatterbox with emotion", turbo: "Chatterbox Turbo" })[hl.clone_model] || "running"}). Add your voice under Voice & export, My voice.`)
         : serviceRow("warn", "Voice cloning", "optional", "Starting. The first start downloads the model (about 2 GB), which takes a few minutes.", "docker compose logs cloner"),
     !hl.llm_configured
       ? serviceRow("warn", "Notes AI", "optional", "Not set up. It drafts notes for slides that have none; everything else works without it.", "docker compose --profile ollama up -d\n# then set NOTES_LLM_BASE_URL and NOTES_LLM_MODEL in .env")
@@ -933,7 +933,7 @@ async function openMyVoices() {
       toast(`Using ${v.name}.`, "ok", 2500); dlg.close();
     });
     return h("li", {}, h("span", { class: "myv-ico" }, icon("mic")),
-      h("span", { class: "myv-name" }, h("strong", {}, v.name), h("small", {}, `${v.seconds} s sample`)), use, del);
+      h("span", { class: "myv-name" }, h("strong", {}, v.name), h("small", {}, `${v.seconds} s sample` + (v.has_transcript ? " · with transcript" : ""))), use, del);
   }));
   const status = hl.clone ? null : h("div", { class: "warn-box" }, "The cloning model is still loading (first start downloads about 2 GB). You can add your voice now; it will speak once the model is ready.");
 
@@ -948,6 +948,12 @@ async function openMyVoices() {
   const startField = h("label", { class: "field", hidden: true, style: "margin-top:12px" },
     "Start at (seconds): skip music or an intro, then 20 seconds are used", startIn);
   let player = h("audio", { controls: true, hidden: true, class: "myv-player" });
+  const transcriptIn = h("textarea", { rows: "2", maxlength: "1000", id: "myv-transcript",
+    placeholder: "Type exactly what is said in the clip" });
+  const qwen = hl.clone_model === "qwen";
+  const transcriptField = h("label", { class: "field", style: "margin-top:12px" },
+    qwen ? "What is said in the clip (makes the copy of your voice much closer)"
+         : "What is said in the clip (optional; used by the Qwen engine)", transcriptIn);
   const consent = h("input", { type: "checkbox", id: "myv-consent" });
   const save = h("button", { class: "btn primary", type: "button", disabled: true }, icon("check"), "Save voice");
   const err = h("p", { class: "error", hidden: true });
@@ -962,7 +968,7 @@ async function openMyVoices() {
   };
   fileIn.addEventListener("change", () => {
     const f = fileIn.files[0];
-    if (f) { setBlob(f, f.name); startField.hidden = false; startIn.value = "0"; }
+    if (f) { setBlob(f, f.name); startField.hidden = false; startIn.value = "0"; transcriptIn.value = ""; }
     fileIn.value = "";
   });
   startIn.addEventListener("input", () => { if (player.src && !player.hidden) player.currentTime = Number(startIn.value) || 0; });
@@ -980,7 +986,10 @@ async function openMyVoices() {
     startField.hidden = true; startIn.value = "0";
     recorder.onstop = () => {
       recBtn.replaceChildren(icon("mic"), "Record again");
-      if (chunks.length) setBlob(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }), "recording.webm");
+      if (chunks.length) {
+        setBlob(new Blob(chunks, { type: recorder.mimeType || "audio/webm" }), "recording.webm");
+        transcriptIn.value = READ_ALOUD;  // edit it if you said something different
+      }
     };
     const started = Date.now();
     rec = { recorder, stream, chunks, timer: setInterval(() => {
@@ -998,6 +1007,7 @@ async function openMyVoices() {
     const fd = new FormData();
     fd.append("name", name.value.trim()); fd.append("consent", "true"); fd.append("file", blob, blobName);
     fd.append("start", String(Math.max(0, Number(startIn.value) || 0)));
+    fd.append("transcript", transcriptIn.value.trim());
     try {
       const v = await (await api("/api/my-voices", { method: "POST", body: fd })).json();
       S.settings.voice = v.id; store.set("ns-settings", S.settings);
@@ -1021,6 +1031,7 @@ async function openMyVoices() {
     h("div", { class: "row-inline rec-row" }, recBtn, upBtn, recTime, fileIn),
     player,
     startField,
+    transcriptField,
     h("label", { class: "field", style: "margin-top:14px" }, "Name", name),
     h("label", { class: "consent" }, consent,
       h("span", {}, "This is my own voice, or I have the speaker's permission to clone it.")),

@@ -1,9 +1,11 @@
 # cloner: your own voice (optional)
 
-Clones a voice from a short English recording with [Chatterbox](https://github.com/resemble-ai/chatterbox) (MIT) and
-serves it through the same OpenAI-style API as the other voice engines.
+Clones a voice from a short English recording with [Chatterbox](https://github.com/resemble-ai/chatterbox) (MIT,
+`CLONE_MODEL=turbo` or `standard`) or [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Apache 2.0, `CLONE_MODEL=qwen`,
+installed by `scripts/run-cloner-mac.sh`) and serves it through the same OpenAI-style API as the other voice engines.
 
-- `POST /voices` (multipart `name`, `consent=true`, `file`) stores a reference clip as voice `clone_<name>`.
+- `POST /voices` (multipart `name`, `consent=true`, `file`, optional `start` and `transcript`) stores a reference clip
+  as voice `clone_<name>`. The transcript (what is said in the clip) lets Qwen3-TTS copy the voice more closely.
 - `GET /voices`, `DELETE /voices/{id}` list and delete them. `GET /v1/audio/voices`, `POST /v1/audio/speech` speak.
 - The model (~2 GB) downloads on first start into `/models`; clips live in `/voices`. CPU by default (`CLONE_DEVICE`).
 - Chatterbox watermarks its output so it can be identified as AI-generated.

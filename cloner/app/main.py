@@ -1,4 +1,7 @@
-"""Voice cloning with Chatterbox (English), behind the same OpenAI-style API as the other voice engines.
+"""Voice cloning behind the same OpenAI-style API as the other voice engines.
+
+Engines (CLONE_MODEL): "turbo" and "standard" (Chatterbox, MIT) or "qwen" (Qwen3-TTS Base, Apache 2.0; most human
+sounding, best with a transcript of the reference clip).
 
 - POST /voices        upload a short reference clip (multipart: name, consent=true, file) -> new voice "clone_<slug>"
 - GET  /voices        list saved voices with details
@@ -27,9 +30,13 @@ from pydantic import BaseModel, Field
 VOICES_DIR = Path(os.environ.get("VOICES_DIR", "/voices"))
 DEVICE = os.environ.get("CLONE_DEVICE", "cpu")
 # turbo: much faster, no emotion control. standard: slower, supports the Emotion setting.
+# qwen: Qwen3-TTS, the most natural sounding (needs its own install, see scripts/run-cloner-mac.sh).
 MODEL_KIND = os.environ.get("CLONE_MODEL", "turbo").strip().lower()
-if MODEL_KIND not in ("turbo", "standard"):
+if MODEL_KIND not in ("turbo", "standard", "qwen"):
     MODEL_KIND = "turbo"
+QWEN_MODEL = os.environ.get("QWEN_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-Base")
+QWEN_LANGUAGE = os.environ.get("QWEN_LANGUAGE", "English")
+MAX_CLIP = 20.0  # seconds kept from an upload
 MAX_UPLOAD = 100 * 1024 * 1024  # videos (e.g. a saved reel) are fine: only the audio is kept
 MEDIA = {"mp3": "audio/mpeg", "wav": "audio/wav"}
 
@@ -46,6 +53,8 @@ class Engine:
         threading.Thread(target=self._load, daemon=True).start()
 
     def _load(self) -> None:
+        if self.kind == "qwen":
+            return self._load_qwen()
         try:
             import perth
             import torch
@@ -67,6 +76,49 @@ class Engine:
             self.error = f"{type(exc).__name__}: {exc}"[:400]
             print(f"[cloner] model failed to load: {self.error}", flush=True)
 
+    def _load_qwen(self) -> None:
+        try:
+            import torch
+            from qwen_tts import Qwen3TTSModel
+
+            torch.set_num_threads(max(1, os.cpu_count() or 4))
+            # float32 on the Mac GPU: half precision makes the clone model produce NaNs there.
+            dtype = torch.bfloat16 if DEVICE.startswith("cuda") else torch.float32
+            print(f"[cloner] loading Qwen3-TTS {QWEN_MODEL} on {DEVICE} (first start downloads the model)…", flush=True)
+            self.model = Qwen3TTSModel.from_pretrained(QWEN_MODEL, device_map=DEVICE, dtype=dtype)
+            self.model.sr = 24000
+            print(f"[cloner] model ready (qwen, {DEVICE})", flush=True)
+            for meta in voice_meta():
+                self.warm(VOICES_DIR / f"{meta['id']}.wav")
+        except Exception as exc:
+            self.error = f"{type(exc).__name__}: {exc}"[:400]
+            print(f"[cloner] model failed to load: {self.error}", flush=True)
+
+    def _qwen_prompt(self, ref: Path):
+        """Build (once) the Qwen voice prompt. With a transcript it copies the voice far more closely."""
+        key = (str(ref), ref.stat().st_mtime)
+        if key not in self.conds:
+            transcript = (voice_info(ref.stem).get("transcript") or "").strip()
+            if transcript:
+                prompt = self.model.create_voice_clone_prompt(ref_audio=str(ref), ref_text=transcript)
+            else:
+                prompt = self.model.create_voice_clone_prompt(ref_audio=str(ref), x_vector_only_mode=True)
+            self.conds[key] = prompt
+        return self.conds[key]
+
+    def _qwen_say(self, chunk: str, prompt):
+        try:
+            wavs, sr = self.model.generate_voice_clone(text=chunk, language=QWEN_LANGUAGE, voice_clone_prompt=prompt)
+        except RuntimeError as exc:
+            if "probability tensor" not in str(exc):
+                raise
+            # sampling broke (NaN); greedy decoding still gives good speech
+            wavs, sr = self.model.generate_voice_clone(text=chunk, language=QWEN_LANGUAGE, voice_clone_prompt=prompt,
+                                                       do_sample=False)
+        self.model.sr = sr
+        import numpy as np
+        return np.asarray(wavs[0], dtype=np.float32).reshape(-1)
+
     def _prepare(self, ref: Path, exaggeration: float = 0.5) -> None:
         """Analyse a reference clip once and keep the result (call with self.lock held)."""
         key = (str(ref), ref.stat().st_mtime)
@@ -83,7 +135,7 @@ class Engine:
             return
         try:
             with self.lock:
-                self._prepare(ref)
+                self._qwen_prompt(ref) if self.kind == "qwen" else self._prepare(ref)
         except Exception as exc:
             print(f"[cloner] could not prepare {ref.name}: {exc}", flush=True)
 
@@ -95,8 +147,12 @@ class Engine:
         pieces = []
         with self.lock:
             # Analysing the reference clip is slow: do it once per voice (and file version), not per sentence.
-            self._prepare(ref, exaggeration)
+            prompt = self._qwen_prompt(ref) if self.kind == "qwen" else self._prepare(ref, exaggeration)
             for chunk in chunks:
+                if self.kind == "qwen":
+                    pieces.append(self._qwen_say(chunk, prompt))
+                    pieces.append(np.zeros(int(self.model.sr * 0.25), dtype=np.float32))
+                    continue
                 if self.kind == "turbo":
                     out = self.model.generate(chunk)
                 else:
@@ -145,6 +201,19 @@ def voice_meta() -> list[dict]:
     return items
 
 
+def voice_info(voice_id: str) -> dict:
+    try:
+        return json.loads((VOICES_DIR / f"{voice_id}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def public(meta: dict) -> dict:
+    out = {k: v for k, v in meta.items() if k != "transcript"}
+    out["has_transcript"] = bool(meta.get("transcript"))
+    return out
+
+
 def has_audio(path: str) -> bool:
     proc = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index",
                            "-of", "csv=p=0", path], capture_output=True, text=True)
@@ -159,7 +228,7 @@ def ffmpeg(args: list[str], data: bytes | None = None) -> bytes:
 
 
 engine = Engine()
-app = FastAPI(title="Voice cloning (Chatterbox, OpenAI-compatible)")
+app = FastAPI(title="Voice cloning (Chatterbox or Qwen3-TTS, OpenAI-compatible)")
 
 
 @app.on_event("startup")
@@ -177,18 +246,19 @@ def live():
 def health():
     body = {"status": "ready" if engine.model else ("error" if engine.error else "loading"),
             "error": engine.error, "voices": len(voice_meta()), "model": engine.kind,
-            "emotion": engine.kind == "standard"}
+            "emotion": engine.kind == "standard", "transcript": engine.kind == "qwen"}
     return body if engine.model else JSONResponse(body, status_code=503)
 
 
 @app.get("/voices")
 def list_my_voices():
-    return {"voices": voice_meta()}
+    return {"voices": [public(m) for m in voice_meta()]}
 
 
 @app.post("/voices")
 async def add_voice(name: str = Form(..., min_length=1, max_length=40), consent: bool = Form(False),
-                    file: UploadFile = File(...), start: float = Form(0.0, ge=0, le=3600)):
+                    file: UploadFile = File(...), start: float = Form(0.0, ge=0, le=3600),
+                    transcript: str = Form("", max_length=1000)):
     if not consent:
         raise HTTPException(400, "Please confirm this is your voice or that you have permission to use it.")
     data = await file.read(MAX_UPLOAD + 1)
@@ -204,7 +274,7 @@ async def add_voice(name: str = Form(..., min_length=1, max_length=40), consent:
         wav = ffmpeg(["-ss", f"{start:.2f}", "-i", src.name, "-vn", "-af",
                       "silenceremove=start_periods=1:start_threshold=-45dB,highpass=f=70,afftdn=nf=-25,"
                       "loudnorm=I=-20:TP=-2:LRA=11",
-                      "-ac", "1", "-ar", "24000", "-t", "20", "-f", "wav", "-"])
+                      "-ac", "1", "-ar", "24000", "-t", f"{MAX_CLIP:g}", "-f", "wav", "-"])
     seconds = (len(wav) - 44) / (24000 * 2)
     if seconds < 4:
         raise HTTPException(400, f"The recording is too short ({seconds:.1f} s). Record at least 5 seconds of clear speech.")
@@ -215,9 +285,12 @@ async def add_voice(name: str = Form(..., min_length=1, max_length=40), consent:
         vid = f"{base}_{n}"
     (VOICES_DIR / f"{vid}.wav").write_bytes(wav)
     meta = {"id": vid, "name": name.strip(), "seconds": round(seconds, 1), "created": time.time()}
+    transcript = " ".join(transcript.split())
+    if transcript and seconds < MAX_CLIP - 0.5:  # a clip cut at 20 s no longer matches its transcript
+        meta["transcript"] = transcript
     (VOICES_DIR / f"{vid}.json").write_text(json.dumps(meta), encoding="utf-8")
     threading.Thread(target=engine.warm, args=(VOICES_DIR / f"{vid}.wav",), daemon=True).start()
-    return meta
+    return public(meta)
 
 
 @app.delete("/voices/{voice_id}")

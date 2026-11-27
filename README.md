@@ -27,7 +27,8 @@ No account, no cloud, no per-minute fees.
 - **Optional AI note writer** for slides that have no notes (local [Ollama](https://ollama.com) or any OpenAI-compatible API).
 - **Free voices** from [Kokoro](https://github.com/remsky/Kokoro-FastAPI), or any OpenAI-compatible text-to-speech server.
 - **Your own voice.** Record about 10 seconds in the browser and narrate in your own (English) voice, using the
-  optional [Chatterbox](https://github.com/resemble-ai/chatterbox) voice-cloning add-on.
+  optional voice-cloning add-on: [Chatterbox](https://github.com/resemble-ai/chatterbox), or
+  [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) for the most human-sounding result on an Apple Silicon Mac.
 - **Subtitles in 6 languages** (English, Albanian, Italian, Portuguese, Norwegian, Turkish), translated by your AI model,
   added as selectable tracks in the MP4 and as SRT files.
 - **Albanian (Shqip) voice** built in, through a local [Piper](https://github.com/OHF-Voice/piper1-gpl) engine. Add more Piper voices for other languages.
@@ -87,6 +88,15 @@ docker compose --profile clone up -d --build
 ```
 
 Then open **Voice & export → My voice**, record yourself reading the sample text, and save.
+
+On an Apple Silicon Mac, run cloning natively on the GPU instead, with the most natural engine (Qwen3-TTS, about
+4.5 GB on first start):
+
+```bash
+CLONE_MODEL=qwen ./scripts/run-cloner-mac.sh start
+printf '\nCLONE_TTS_URL=http://host.docker.internal:8890\n' >> .env
+docker compose up -d narrator
+```
 
 ## How it works
 

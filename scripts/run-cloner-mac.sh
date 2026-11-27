@@ -3,6 +3,8 @@
 # Docker on macOS can't reach the GPU, so this is usually many times faster than the Docker version.
 #
 #   ./scripts/run-cloner-mac.sh          # first run installs everything (a few minutes), then starts it
+#   CLONE_MODEL=qwen ./scripts/run-cloner-mac.sh start   # Qwen3-TTS: the most human-sounding engine (~4.5 GB model)
+#   CLONE_MODEL=standard ...             # Chatterbox with the Emotion setting;  default: turbo (fastest)
 #
 # Then, in another terminal (once):
 #   printf '\nCLONE_TTS_URL=http://host.docker.internal:8890\n' >> .env   (the leading \n matters)
@@ -57,17 +59,30 @@ if [[ -z "$PY" ]]; then
   exit 1
 fi
 
-VENV="cloner/.venv-mac"
-if [[ ! -x "$VENV/bin/uvicorn" ]]; then
-  echo "Setting up the voice-cloning service with $PY (first time only, a few minutes)..."
-  "$PY" -m venv "$VENV"
-  "$VENV/bin/pip" install --upgrade pip
-  "$VENV/bin/pip" install -r cloner/requirements.txt chatterbox-tts==0.1.7
-fi
-# The watermark library (resemble-perth) imports pkg_resources, which comes from setuptools < 81.
-if ! "$VENV/bin/python" -c "import pkg_resources" >/dev/null 2>&1; then
-  echo "Installing setuptools (needed by the watermark library)..."
-  "$VENV/bin/pip" install "setuptools<81"
+export CLONE_MODEL="${CLONE_MODEL:-turbo}"
+if [[ "$CLONE_MODEL" == "qwen" ]]; then
+  # Qwen3-TTS needs a different transformers version than Chatterbox, so it gets its own environment.
+  VENV="cloner/.venv-mac-qwen"
+  if [[ ! -x "$VENV/bin/uvicorn" ]] || ! "$VENV/bin/python" -c "import qwen_tts" >/dev/null 2>&1; then
+    echo "Setting up Qwen3-TTS with $PY (first time only, a few minutes)..."
+    "$PY" -m venv "$VENV"
+    "$VENV/bin/pip" install --upgrade pip
+    "$VENV/bin/pip" install fastapi "uvicorn[standard]" python-multipart qwen-tts==0.1.1
+  fi
+  command -v sox >/dev/null 2>&1 || echo "Tip: 'brew install sox' silences a harmless warning from Qwen3-TTS."
+else
+  VENV="cloner/.venv-mac"
+  if [[ ! -x "$VENV/bin/uvicorn" ]]; then
+    echo "Setting up the voice-cloning service with $PY (first time only, a few minutes)..."
+    "$PY" -m venv "$VENV"
+    "$VENV/bin/pip" install --upgrade pip
+    "$VENV/bin/pip" install -r cloner/requirements.txt chatterbox-tts==0.1.7
+  fi
+  # The watermark library (resemble-perth) imports pkg_resources, which comes from setuptools < 81.
+  if ! "$VENV/bin/python" -c "import pkg_resources" >/dev/null 2>&1; then
+    echo "Installing setuptools (needed by the watermark library)..."
+    "$VENV/bin/pip" install "setuptools<81"
+  fi
 fi
 command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg is needed:  brew install ffmpeg" >&2; exit 1; }
 
@@ -75,7 +90,6 @@ mkdir -p data/cloner/voices data/cloner/hf
 export VOICES_DIR="$PWD/data/cloner/voices"
 export HF_HOME="$PWD/data/cloner/hf"
 export CLONE_DEVICE="${CLONE_DEVICE:-mps}"
-export CLONE_MODEL="${CLONE_MODEL:-turbo}"
 export PYTORCH_ENABLE_MPS_FALLBACK=1   # run any operation the GPU lacks on the CPU instead of failing
 
 echo "Voice cloning on the Mac GPU ($CLONE_DEVICE, model $CLONE_MODEL) at http://127.0.0.1:8890"
