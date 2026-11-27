@@ -319,3 +319,7 @@ dialog::backdrop { background: rgba(10, 8, 18, .55); backdrop-filter: blur(3px);
 .consent input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
 .myv-actions { margin-top: 16px; display: flex; justify-content: flex-end; }
 .small { font-size: .82rem; margin-top: 12px; }
+
+.feature-pills { list-style: none; padding: 0; margin: -8px 0 24px; display: flex; flex-wrap: wrap; gap: 8px; }
+.feature-pills li { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: .88rem; font-weight: 600; color: var(--ink); }
+.feature-pills svg { color: var(--accent); }

@@ -5,8 +5,8 @@
 ![Docker](https://img.shields.io/badge/runs%20with-Docker-2496ED?logo=docker&logoColor=white)
 ![Self-hosted](https://img.shields.io/badge/self--hosted-100%25%20local-6d4aff)
 
-**Turn a PowerPoint deck into a narrated MP4 video.** Your speaker notes are read aloud by a natural-sounding AI voice,
-and you get the video, subtitles, per-slide audio and an updated deck. Everything runs on your own computer with Docker.
+**Turn a PowerPoint deck into a narrated MP4 video.** Your speaker notes are read aloud by a natural-sounding AI voice
+(or your own cloned voice), and you get the video, subtitles in up to six languages, per-slide audio and an updated deck. Everything runs on your own computer with Docker.
 No account, no cloud, no per-minute fees.
 
 <p align="center">
@@ -40,7 +40,7 @@ No account, no cloud, no per-minute fees.
   <img src="docs/images/02-script.png" alt="Script editor" width="49%">
 </p>
 <p align="center">
-  <img src="docs/images/06-home-dark.png" alt="Dark theme" width="49%">
+  <img src="docs/images/03-export.png" alt="Voice, My voice and subtitle languages" width="49%">
   <img src="docs/images/04-result.png" alt="Finished video and downloads" width="49%">
 </p>
 
