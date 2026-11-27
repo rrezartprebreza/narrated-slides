@@ -22,18 +22,32 @@ cd "$(dirname "$0")/.."
 PIDFILE="data/cloner/cloner.pid"
 LOGFILE="data/cloner/cloner.log"
 running() { [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; }
+port_pids() { lsof -ti tcp:8890 -sTCP:LISTEN 2>/dev/null | grep . ; }   # also finds one started in another window
 case "${1:-}" in
   start)
-    if running; then echo "Voice service already running (pid $(cat "$PIDFILE"))."; exit 0; fi
+    if running || port_pids >/dev/null; then
+      now="$(curl -s http://127.0.0.1:8890/health | sed -n 's/.*"model":"\([a-z]*\)".*/\1/p')"
+      if [[ -n "$now" && "$now" != "${CLONE_MODEL:-turbo}" ]]; then
+        echo "Switching the voice service from $now to ${CLONE_MODEL:-turbo}..."
+        "$0" stop
+      else
+        echo "Voice service already running${now:+ (model $now)}."; exit 0
+      fi
+    fi
     mkdir -p data/cloner
-    nohup "$0" >"$LOGFILE" 2>&1 &
+    nohup "$0" >"$LOGFILE" 2>&1 &   # a fresh log for each start
     echo $! >"$PIDFILE"
     echo "Voice service started in the background. It keeps running after you close Terminal."
-    echo "Check it:  $0 status     Follow the log:  $0 logs     Stop it:  $0 stop"
+    echo "Model: ${CLONE_MODEL:-turbo}. Check it:  $0 status     Follow the log:  $0 logs     Stop it:  $0 stop"
     exit 0 ;;
   stop)
-    if running; then pkill -P "$(cat "$PIDFILE")" 2>/dev/null; kill "$(cat "$PIDFILE")" 2>/dev/null; rm -f "$PIDFILE"; echo "Voice service stopped.";
-    else rm -f "$PIDFILE"; echo "Voice service is not running."; fi
+    pids="$( { [[ -f "$PIDFILE" ]] && cat "$PIDFILE"; port_pids || true; } | sort -u | tr '\n' ' ')"
+    rm -f "$PIDFILE"
+    if [[ -z "${pids// /}" ]]; then echo "Voice service is not running."; exit 0; fi
+    for p in $pids; do pkill -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done
+    for _ in $(seq 1 20); do port_pids >/dev/null || break; sleep 0.5; done   # wait until the port is free
+    for p in $(port_pids); do kill -9 "$p" 2>/dev/null || true; done
+    echo "Voice service stopped."
     exit 0 ;;
   status)
     if running; then
