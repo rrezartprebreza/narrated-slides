@@ -116,6 +116,7 @@ def health():
         "extra_tts": tts.extra_healthy(),
         "clone": tts.clone_healthy(),
         "clone_emotion": tts.clone_supports_emotion(),
+        "clone_native": "host.docker.internal" in config.CLONE_TTS_URL,
         "default_voice": config.TTS_VOICE,
         "llm_configured": llm.configured(),
         "llm": llm.healthy(),

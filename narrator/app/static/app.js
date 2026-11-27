@@ -250,7 +250,9 @@ async function openStatus() {
     ...(hl.extra_tts === null || hl.extra_tts === undefined ? [] : [hl.extra_tts
       ? serviceRow("ok", "Albanian voice (Piper)", "optional", "Ready. Pick a Shqip voice to narrate Albanian slides.")
       : serviceRow("warn", "Albanian voice (Piper)", "optional", "Starting. On first start it downloads the Albanian voices (about 60 MB each). Give it a minute, then check its log.", "docker compose logs piper")]),
-    hl.clone == null
+    hl.clone == null && hl.clone_native
+      ? serviceRow("bad", "Voice cloning (Mac GPU)", "optional", "Your voice service on this Mac isn't running.", "./scripts/run-cloner-mac.sh start")
+      : hl.clone == null
       ? serviceRow("warn", "Voice cloning", "optional", "Not started. Clone your own English voice from a short recording.", "docker compose --profile clone up -d --build")
       : hl.clone
         ? serviceRow("ok", "Voice cloning", "optional", "Ready. Add your voice under Voice & export, My voice.")
@@ -897,6 +899,14 @@ async function openMyVoices() {
   body.replaceChildren(h("p", { class: "muted" }, "Checking…"));
   await refreshHealth();
   const hl = S.health || {};
+  if (hl.clone == null && hl.clone_native) {
+    body.replaceChildren(
+      h("p", {}, "Your voice service on this Mac isn't running."),
+      h("p", { class: "muted", style: "margin-top:10px" }, "Start it in Terminal, in the narrated-slides folder. It keeps running in the background, even after you close Terminal:"),
+      h("pre", { class: "codeblock" }, "./scripts/run-cloner-mac.sh start"),
+      h("p", { class: "muted" }, "Wait about 30 seconds for the model to load, then reopen this window. Check it with ./scripts/run-cloner-mac.sh status."));
+    return;
+  }
   if (hl.clone == null) {
     body.replaceChildren(
       h("p", {}, "Voice cloning makes narration in your own voice from about 10 seconds of English speech. It runs on this computer, and your recording never leaves it."),

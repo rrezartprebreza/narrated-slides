@@ -9,11 +9,39 @@
 #   docker compose stop cloner            # the Docker version is no longer needed
 #   docker compose up -d narrator
 #
-# Keep this window open while you use your own voice. Press Ctrl+C to stop.
+# Keep this window open while you use your own voice (Ctrl+C stops it), or run it in the background:
+#   ./scripts/run-cloner-mac.sh start     (also: stop, status, logs)
 # It must listen on all interfaces (0.0.0.0) so the Docker containers can reach it. It has no password, so use it
 # on a trusted network (home/office); macOS's firewall can block other devices. CLONE_HOST=127.0.0.1 to restrict it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+# Background mode:  start | stop | status | logs   (no argument = run in this window)
+PIDFILE="data/cloner/cloner.pid"
+LOGFILE="data/cloner/cloner.log"
+running() { [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; }
+case "${1:-}" in
+  start)
+    if running; then echo "Voice service already running (pid $(cat "$PIDFILE"))."; exit 0; fi
+    mkdir -p data/cloner
+    nohup "$0" >"$LOGFILE" 2>&1 &
+    echo $! >"$PIDFILE"
+    echo "Voice service started in the background. It keeps running after you close Terminal."
+    echo "Check it:  $0 status     Follow the log:  $0 logs     Stop it:  $0 stop"
+    exit 0 ;;
+  stop)
+    if running; then pkill -P "$(cat "$PIDFILE")" 2>/dev/null; kill "$(cat "$PIDFILE")" 2>/dev/null; rm -f "$PIDFILE"; echo "Voice service stopped.";
+    else rm -f "$PIDFILE"; echo "Voice service is not running."; fi
+    exit 0 ;;
+  status)
+    if running; then
+      echo "Running (pid $(cat "$PIDFILE"))."
+      curl -s http://127.0.0.1:8890/health && echo
+    else echo "Not running. Start it with:  $0 start"; fi
+    exit 0 ;;
+  logs)
+    exec tail -n 40 -f "$LOGFILE" ;;
+esac
 
 if [[ "$(uname -s)" != "Darwin" || "$(uname -m)" != "arm64" ]]; then
   echo "This script is for Apple Silicon Macs (M1/M2/M3/M4). Use the Docker 'clone' profile elsewhere." >&2
