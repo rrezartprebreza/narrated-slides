@@ -35,6 +35,11 @@ if [[ ! -x "$VENV/bin/uvicorn" ]]; then
   "$VENV/bin/pip" install --upgrade pip
   "$VENV/bin/pip" install -r cloner/requirements.txt chatterbox-tts==0.1.7
 fi
+# The watermark library (resemble-perth) imports pkg_resources, which comes from setuptools < 81.
+if ! "$VENV/bin/python" -c "import pkg_resources" >/dev/null 2>&1; then
+  echo "Installing setuptools (needed by the watermark library)..."
+  "$VENV/bin/pip" install "setuptools<81"
+fi
 command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg is needed:  brew install ffmpeg" >&2; exit 1; }
 
 mkdir -p data/cloner/voices data/cloner/hf

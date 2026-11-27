@@ -47,8 +47,11 @@ class Engine:
 
     def _load(self) -> None:
         try:
+            import perth
             import torch
 
+            if perth.PerthImplicitWatermarker is None:
+                raise RuntimeError("the watermark library could not load; install it with: pip install 'setuptools<81'")
             torch.set_num_threads(max(1, os.cpu_count() or 4))
             if self.kind == "turbo":
                 from chatterbox.tts_turbo import ChatterboxTurboTTS as Model

@@ -3,3 +3,4 @@ fastapi
 uvicorn
 python-multipart
 numpy<2.0.0,>=1.24.0
+setuptools<81   # resemble-perth (Chatterbox's watermark) imports pkg_resources
