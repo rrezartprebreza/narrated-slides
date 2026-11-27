@@ -104,6 +104,12 @@ def voice_meta() -> list[dict]:
     return items
 
 
+def has_audio(path: str) -> bool:
+    proc = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index",
+                           "-of", "csv=p=0", path], capture_output=True, text=True)
+    return proc.returncode == 0 and bool(proc.stdout.strip())
+
+
 def ffmpeg(args: list[str], data: bytes | None = None) -> bytes:
     proc = subprocess.run(["ffmpeg", "-loglevel", "error", *args], input=data, capture_output=True)
     if proc.returncode != 0:
@@ -149,6 +155,9 @@ async def add_voice(name: str = Form(..., min_length=1, max_length=40), consent:
     with tempfile.NamedTemporaryFile(suffix=Path(file.filename or "clip").suffix or ".bin") as src:
         src.write(data)
         src.flush()
+        if not has_audio(src.name):
+            raise HTTPException(400, "This file has no sound. Screen recordings on a Mac don't capture the computer's audio. "
+                                     "Use Record to read the text aloud, or upload a video that has your voice in it.")
         # mono 24 kHz, silence trimmed at the start, at most 20 seconds
         wav = ffmpeg(["-ss", f"{start:.2f}", "-i", src.name, "-vn", "-af", "silenceremove=start_periods=1:start_threshold=-45dB",
                       "-ac", "1", "-ar", "24000", "-t", "20", "-f", "wav", "-"])

@@ -102,3 +102,11 @@ def test_emotion_and_video_upload(client):
     r = client.post("/v1/audio/speech", json={"input": "Wow!", "voice": "clone_reel", "exaggeration": 1.2, "cfg_weight": 0.3})
     assert r.status_code == 200 and fake.emotion == (1.2, 0.3)
     assert client.post("/v1/audio/speech", json={"input": "x", "voice": "clone_reel", "exaggeration": 9}).status_code == 422
+
+
+def test_video_without_sound_is_explained(client):
+    silent = subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=320x240:d=9",
+                             "-c:v", "libx264", "-f", "mp4", "-movflags", "frag_keyframe+empty_moov", "-"],
+                            capture_output=True, check=True).stdout
+    r = client.post("/voices", data={"name": "Silent", "consent": "true"}, files={"file": ("rec.mov", silent, "video/quicktime")})
+    assert r.status_code == 400 and "no sound" in r.json()["detail"]
