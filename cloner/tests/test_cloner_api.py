@@ -83,16 +83,26 @@ def test_voice_lifecycle(client):
     assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg" and len(r.content) > 500
     assert [c[0] for c in fake.calls] == ["Hello there.", "This is my cloned voice!", "Nice?"]
     assert all(c[1].endswith("clone_my_voice.wav") for c in fake.calls)
-    assert len(fake.prepared) == 1 and fake.emotion == (None, None)  # turbo: analysed once, no emotion args
+    assert len(fake.prepared) <= 1 and fake.emotion == (None, None)  # turbo: analysed once, no emotion args
     client.post("/v1/audio/speech", json={"input": "Again.", "voice": "clone_my_voice"})
     assert len(fake.prepared) == 1  # cached
+    # a newly saved voice is analysed right away in the background
+    main.engine.conds = {}
+    fake.prepared.clear()
+    client.post("/voices", data={"name": "Warm", "consent": "true"}, files={"file": ("a.mp3", clip(8))})
+    import time as _t
+    for _ in range(50):
+        if fake.prepared:
+            break
+        _t.sleep(0.05)
+    assert fake.prepared and fake.prepared[0].endswith("clone_warm.wav")
     assert client.get("/health").json()["model"] == "turbo"
     assert client.post("/v1/audio/speech", json={"input": "x", "voice": "af_heart"}).status_code == 400
 
     assert client.delete("/voices/clone_my_voice").json() == {"ok": True}
     assert client.delete("/voices/clone_my_voice").status_code == 404
     assert client.delete("/voices/../etc").status_code == 404
-    assert [v["id"] for v in client.get("/voices").json()["voices"]] == ["clone_my_voice_2"]
+    assert [v["id"] for v in client.get("/voices").json()["voices"]] == ["clone_my_voice_2", "clone_warm"]
 
 
 def test_split_text_keeps_long_sentences_short():

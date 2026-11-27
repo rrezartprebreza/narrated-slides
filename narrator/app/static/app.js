@@ -454,15 +454,21 @@ async function playPreview(text, btn, labels) {
   if (S.audio || btn.dataset.loading) { stopAudio(); return; }
   text = text.trim();
   if (!text) { toast("There's nothing to read yet. Write some notes first.", "info"); return; }
-  const original = text.length > 1500;
+  const clone = isClone(S.settings.voice);
+  let limit = 1500;
+  if (clone) {  // own voices are generated on the CPU: preview just the opening sentences
+    const first = text.match(/^(.+?[.!?])(\s+.+?[.!?])?(?=\s|$)/s);
+    limit = Math.min(first ? first[0].length : 220, 260);
+  }
+  const original = text.length > limit;
   btn.dataset.loading = "1";
-  btn.replaceChildren(icon("stop"), "Loading…");
+  btn.replaceChildren(icon("stop"), clone ? "Speaking in your voice…" : "Loading…");
   const reset = () => { delete btn.dataset.loading; btn.replaceChildren(icon("play"), labels); document.removeEventListener("ns-audio-stopped", reset); };
   document.addEventListener("ns-audio-stopped", reset);
   try {
     const res = await api("/api/tts/preview", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text.slice(0, 1500), voice: S.settings.voice || null, speed: Number(S.settings.speed) || 1, emotion: S.settings.emotion || "natural" }),
+      body: JSON.stringify({ text: text.slice(0, limit), voice: S.settings.voice || null, speed: Number(S.settings.speed) || 1, emotion: S.settings.emotion || "natural" }),
     });
     const url = URL.createObjectURL(await res.blob());
     if (!btn.dataset.loading) { URL.revokeObjectURL(url); return; } // cancelled while loading
@@ -472,7 +478,7 @@ async function playPreview(text, btn, labels) {
     a.onerror = () => { toast("Couldn't play that audio.", "error"); stopAudio(); };
     btn.replaceChildren(icon("stop"), "Stop");
     await a.play();
-    if (original) toast("Previewing the first part of a long note.", "info", 2500);
+    if (original) toast(clone ? "Previewing the first sentences in your voice. The video uses all of them." : "Previewing the first part of a long note.", "info", 3000);
   } catch (e) {
     toast(e.message, "error");
     stopAudio();

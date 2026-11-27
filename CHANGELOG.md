@@ -2,6 +2,8 @@
 
 ## v1.5.0 (2026-11-27)
 
+- Faster previews in your own voice: only the opening sentences are previewed, and saved voices are analysed in
+  advance (when saved and when the service starts), so the first preview doesn't wait.
 - Much faster cloned voices: Chatterbox Turbo by default (`CLONE_MODEL=turbo`), and the voice sample is analysed once
   instead of for every sentence. `CLONE_MODEL=standard` keeps the slower, expressive model with Emotion.
 - Saved voice samples are cleaned (rumble filter, noise reduction, even loudness) for a better clone.

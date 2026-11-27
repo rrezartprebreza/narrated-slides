@@ -58,9 +58,31 @@ class Engine:
             print(f"[cloner] loading Chatterbox {self.kind} (first start downloads the model)…", flush=True)
             self.model = Model.from_pretrained(device=DEVICE)
             print(f"[cloner] model ready ({self.kind}, {torch.get_num_threads()} CPU threads)", flush=True)
+            for meta in voice_meta():  # analyse saved voices now, so the first preview doesn't wait
+                self.warm(VOICES_DIR / f"{meta['id']}.wav")
         except Exception as exc:
             self.error = f"{type(exc).__name__}: {exc}"[:400]
             print(f"[cloner] model failed to load: {self.error}", flush=True)
+
+    def _prepare(self, ref: Path, exaggeration: float = 0.5) -> None:
+        """Analyse a reference clip once and keep the result (call with self.lock held)."""
+        key = (str(ref), ref.stat().st_mtime)
+        if key not in self.conds:
+            if self.kind == "turbo":
+                self.model.prepare_conditionals(str(ref))
+            else:
+                self.model.prepare_conditionals(str(ref), exaggeration=exaggeration)
+            self.conds[key] = self.model.conds
+        self.model.conds = self.conds[key]
+
+    def warm(self, ref: Path) -> None:
+        if self.model is None or not ref.exists():
+            return
+        try:
+            with self.lock:
+                self._prepare(ref)
+        except Exception as exc:
+            print(f"[cloner] could not prepare {ref.name}: {exc}", flush=True)
 
     def wav(self, text: str, ref: Path, exaggeration: float = 0.5, cfg_weight: float = 0.5) -> bytes:
         """Generate sentence by sentence (long inputs make the model drift) and join as 16-bit WAV."""
@@ -70,14 +92,7 @@ class Engine:
         pieces = []
         with self.lock:
             # Analysing the reference clip is slow: do it once per voice (and file version), not per sentence.
-            key = (str(ref), ref.stat().st_mtime)
-            if key not in self.conds:
-                if self.kind == "turbo":
-                    self.model.prepare_conditionals(str(ref))
-                else:
-                    self.model.prepare_conditionals(str(ref), exaggeration=exaggeration)
-                self.conds[key] = self.model.conds
-            self.model.conds = self.conds[key]
+            self._prepare(ref, exaggeration)
             for chunk in chunks:
                 if self.kind == "turbo":
                     out = self.model.generate(chunk)
@@ -198,6 +213,7 @@ async def add_voice(name: str = Form(..., min_length=1, max_length=40), consent:
     (VOICES_DIR / f"{vid}.wav").write_bytes(wav)
     meta = {"id": vid, "name": name.strip(), "seconds": round(seconds, 1), "created": time.time()}
     (VOICES_DIR / f"{vid}.json").write_text(json.dumps(meta), encoding="utf-8")
+    threading.Thread(target=engine.warm, args=(VOICES_DIR / f"{vid}.wav",), daemon=True).start()
     return meta
 
 
