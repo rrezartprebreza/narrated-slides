@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.8.1 (2026-11-27)
+
+- `scripts/run-ollama-mac.sh`: run the notes AI natively on an Apple Silicon Mac (GPU) instead of in Docker, so Docker
+  needs much less memory. It updates `.env` for you; `docker` switches back.
+- The Services panel says you can write notes yourself when the notes AI is off.
+
 ## v1.8.0 (2026-11-27)
 
 - Your own voice keeps the feeling you record it with: the recording guide now says so, and you can say your own words.

@@ -107,6 +107,25 @@ To turn the extra engine off, remove `EXTRA_TTS_BASE_URL` from the `narrator` se
 | `EXTRA_TTS_MODEL` | narrator | Model name sent to it (default `piper`). |
 | `PIPER_VOICES` | piper | Voices to download and serve. |
 
+## Notes AI on a Mac (optional)
+
+The notes AI drafts notes for slides that have none and translates subtitles. It is optional: without it you write the
+notes yourself (or keep the ones already in your .pptx), and everything else works.
+
+On an Apple Silicon Mac, run Ollama natively instead of in Docker. It uses the GPU, so it is faster, and Docker needs
+much less memory (6 GB is enough in Docker Desktop → Settings → Resources):
+
+```bash
+brew install ollama
+./scripts/run-ollama-mac.sh start      # also: stop, status, logs
+docker compose stop ollama && docker compose up -d
+```
+
+`start` runs `ollama serve` on 0.0.0.0:11434 (so Docker can reach it), pulls `OLLAMA_MODEL` (default `llama3.2:3b`),
+points `NOTES_LLM_BASE_URL` and `OLLAMA_URL` in `.env` at `host.docker.internal`, and removes `ollama` from
+`COMPOSE_PROFILES`. If the Ollama menu-bar app is already running, quit it first: it only listens on 127.0.0.1.
+`./scripts/run-ollama-mac.sh docker` switches back to Ollama in Docker.
+
 ## Voice cloning (optional)
 
 The `cloner` service runs [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (Apache 2.0) and clones a voice from a short

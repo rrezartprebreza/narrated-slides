@@ -257,10 +257,10 @@ async function openStatus() {
         ? serviceRow("ok", "Voice cloning", "optional", "Ready. Add your voice under Voice & export, My voice.")
         : serviceRow("warn", "Voice cloning", "optional", "Starting. The first start downloads the model (2.5 to 4.5 GB), which takes a few minutes.", "docker compose logs cloner"),
     !hl.llm_configured
-      ? serviceRow("warn", "Notes AI", "optional", "Not set up. It drafts notes for slides that have none; everything else works without it.", "docker compose --profile ollama up -d\n# then set NOTES_LLM_BASE_URL and NOTES_LLM_MODEL in .env")
+      ? serviceRow("warn", "Notes AI", "optional", "Not set up. It drafts notes and translates subtitles; without it, write the notes yourself and everything else works.", "# On a Mac (uses the GPU, lighter on Docker):\n./scripts/run-ollama-mac.sh start\n# Anywhere else:\ndocker compose --profile ollama up -d")
       : hl.llm
         ? serviceRow("ok", "Notes AI", "optional", "Ready.")
-        : serviceRow("bad", "Notes AI", "optional", "Configured but not answering. If you use Ollama, make sure it is running and the model has been pulled.", "ollama serve\nollama pull <model-name>"),
+        : serviceRow("bad", "Notes AI", "optional", "Configured but not answering. If you use Ollama, make sure it is running and the model has been pulled. You can still write the notes yourself.", "./scripts/run-ollama-mac.sh status   # on a Mac\n./scripts/run-ollama-mac.sh start"),
     hl.presenton
       ? serviceRow(hl.presenton_api_key ? "ok" : "warn", "Presenton", "optional", hl.presenton_api_key
         ? "Ready. You can generate decks from a prompt."
