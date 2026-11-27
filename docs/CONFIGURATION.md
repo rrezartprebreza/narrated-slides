@@ -143,6 +143,9 @@ It runs on the CPU, so it uses the smaller `Qwen/Qwen3-TTS-12Hz-0.6B-Base` model
   the app fill this in with the sample text; for uploads, type it in. Clips cut at 20 seconds skip it, because the
   words would no longer match. Without it the voice's timbre is still copied, less closely.
 - Each voice is analysed once and reused for every sentence; saved voices are analysed when the service starts.
+- The copied voice keeps the tone of the recording, so record in the mood you want. The **Delivery** setting
+  (`style` in the speech API: `steady`, `natural`, `expressive`) changes the sampling temperature, i.e. how freely
+  the delivery varies.
 - It speaks English (`QWEN_LANGUAGE`). Qwen3-TTS also supports Chinese, Japanese, Korean, German, French, Russian,
   Portuguese, Spanish and Italian, but not Albanian.
 

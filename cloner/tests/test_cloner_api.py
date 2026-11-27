@@ -25,6 +25,7 @@ class FakeQwen:
         if self.fail_sampling and kw.get("do_sample") is not False:
             raise RuntimeError("probability tensor contains either inf, nan or element < 0")
         self.calls.append((text, language, voice_clone_prompt[0][1], kw.get("do_sample")))
+        self.kwargs = kw
         return [np.zeros(6000, dtype=np.float32)], 24000
 
 
@@ -141,3 +142,16 @@ def test_qwen_engine_uses_transcript(client):
     main.engine.prompts = {}
     r = client.post("/v1/audio/speech", json={"input": "Retry me.", "voice": "clone_q"})
     assert r.status_code == 200 and flaky.calls == [("Retry me.", "English", str(main.VOICES_DIR / "clone_q.wav"), False)]
+
+
+def test_delivery_style_sets_sampling(client):
+    client.post("/voices", data={"name": "S", "consent": "true"}, files={"file": ("a.mp3", clip(8))})
+    fake = FakeQwen()
+    main.engine.model = fake
+    assert client.post("/v1/audio/speech", json={"input": "Hi.", "voice": "clone_s"}).status_code == 200
+    assert "temperature" not in fake.kwargs  # natural: model defaults
+    client.post("/v1/audio/speech", json={"input": "Hi.", "voice": "clone_s", "style": "expressive"})
+    assert fake.kwargs["temperature"] > 1 and fake.kwargs["top_p"] == 0.95
+    client.post("/v1/audio/speech", json={"input": "Hi.", "voice": "clone_s", "style": "steady"})
+    assert fake.kwargs["temperature"] < 0.7
+    assert client.post("/v1/audio/speech", json={"input": "Hi.", "voice": "clone_s", "style": "angry"}).status_code == 422

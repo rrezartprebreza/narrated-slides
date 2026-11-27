@@ -124,7 +124,7 @@ def render_deck(deck_id: str, job: Job, req: dict) -> dict:
     for s in slides:
         if str(s["n"]) in req["notes"]:
             s["notes"] = req["notes"][str(s["n"])].strip()
-    state["settings"] = {k: req.get(k) for k in ("voice", "speed", "pause", "silent_seconds", "resolution", "subtitle_languages")}
+    state["settings"] = {k: req.get(k) for k in ("voice", "speed", "pause", "silent_seconds", "resolution", "subtitle_languages", "style")}
     store.save(deck_id, state)
 
     if not any(tts.clean_for_speech(s["notes"]) for s in slides):
@@ -152,7 +152,7 @@ def render_deck(deck_id: str, job: Job, req: dict) -> dict:
         speech_len = 0.0
         if tts.clean_for_speech(s["notes"]):
             audio = audio_dir / f"slide-{s['n']:02d}.mp3"
-            audio.write_bytes(tts.speech(s["notes"], req["voice"], req["speed"], "mp3"))
+            audio.write_bytes(tts.speech(s["notes"], req["voice"], req["speed"], "mp3", req.get("style") or "natural"))
             audio_files.append(audio)
             speech_len = video.probe_duration(audio)
         segment = seg_dir / f"seg-{s['n']:03d}.mp4"

@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.8.0 (2026-11-27)
+
+- Your own voice keeps the feeling you record it with: the recording guide now says so, and you can say your own words.
+- New **Delivery** setting for your own voices: Steady, Natural or Expressive (how freely the voice varies its tone).
+
 ## v1.7.0 (2026-11-27)
 
 - Qwen3-TTS is now the only voice-cloning engine; Chatterbox and the Emotion setting are removed.

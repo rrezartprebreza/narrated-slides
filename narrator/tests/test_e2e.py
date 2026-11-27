@@ -431,11 +431,13 @@ def _cloner_app(voices_dir):
 
         def generate_voice_clone(self, text, language=None, voice_clone_prompt=None, **kw):
             Model.calls.append(text)
+            Model.kwargs = kw
             return [np.zeros(6000, dtype=np.float32)], 24000
 
     mod.engine.model = Model()
     voices_dir.mkdir(parents=True, exist_ok=True)
     _cloner_app.transcripts = Model.transcripts
+    _cloner_app.model_cls = Model
     return mod.app, Model.calls
 
 
@@ -467,6 +469,8 @@ def test_my_voice_clone_flow(client, deck_file, tmp_path, monkeypatch):
     assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg"
     assert calls[-2:] == ["Hello students.", "Welcome back!"]
     assert _cloner_app.transcripts[-1] == "Hello, and welcome."  # the transcript reaches the cloner
+    client.post("/api/tts/preview", json={"text": "Amazing!", "voice": vid, "style": "expressive"})
+    assert _cloner_app.model_cls.kwargs.get("temperature", 0) > 1  # Delivery reaches the cloner
     assert client.get("/api/my-voices").json()["voices"][0]["has_transcript"] is True
 
     deck_id = upload(client, deck_file)

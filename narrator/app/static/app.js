@@ -143,7 +143,7 @@ function voiceSelect(id) {
 }
 
 // ---------- state ----------
-const DEFAULTS = { voice: "", speed: 1, pause: 0.8, silent: 3, res: 1080, subs: [] };
+const DEFAULTS = { voice: "", speed: 1, pause: 0.8, silent: 3, res: 1080, subs: [], style: "natural" };
 const SUB_LANGS = [["en", "English"], ["sq", "Shqip"], ["it", "Italiano"], ["pt", "Português"], ["no", "Norsk"], ["tr", "Türkçe"]];
 function voiceLangCode(v) {
   if (isAlbanian(v)) return "sq";
@@ -469,7 +469,7 @@ async function playPreview(text, btn, labels) {
   try {
     const res = await api("/api/tts/preview", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text.slice(0, limit), voice: S.settings.voice || null, speed: Number(S.settings.speed) || 1 }),
+      body: JSON.stringify({ text: text.slice(0, limit), voice: S.settings.voice || null, speed: Number(S.settings.speed) || 1, style: S.settings.style || "natural" }),
     });
     const url = URL.createObjectURL(await res.blob());
     if (!btn.dataset.loading) { URL.revokeObjectURL(url); return; } // cancelled while loading
@@ -700,12 +700,30 @@ function renderExport() {
       h("div", { class: "field wide" }, h("label", { for: "voice" }, "Voice"),
         h("div", { class: "row-inline" }, voiceSel, sampleBtn,
           h("button", { class: "btn sm", type: "button", onclick: openMyVoices }, icon("mic"), "My voice"))),
+      deliveryField(),
       h("div", { class: "field wide" }, h("label", { for: "speed" }, "Speaking speed ", speedVal), speed),
       h("label", { class: "field" }, "Pause after each slide (seconds)", pause),
       h("label", { class: "field" }, "Silent slide length (seconds)", silent),
       h("div", { class: "field wide" }, "Video size", resSeg),
       subsField()));
 
+
+  function deliveryField() {  // own voices only: how freely the copy plays with the recording's tone
+    const STYLES = [["steady", "Steady"], ["natural", "Natural"], ["expressive", "Expressive"]];
+    const seg = h("div", { class: "seg", role: "radiogroup", "aria-label": "Delivery" }, STYLES.map(([val, label]) => {
+      const input = h("input", { type: "radio", name: "style", value: val, checked: (st.style || "natural") === val });
+      input.addEventListener("change", () => { st.style = val; persist(); });
+      return h("label", {}, input, h("span", {}, label));
+    }));
+    const wrap = h("div", { class: "field wide" }, "Delivery", seg,
+      h("p", { class: "sub-note" }, "Your voice keeps the feeling you recorded it with. Steady is even and calm; Expressive "
+        + "varies more, like live speaking. For a different mood, record another voice in that mood (for example "
+        + "\u201cMe \u2013 energetic\u201d). Press Hear it to compare."));
+    const sync = () => { wrap.hidden = !isClone(st.voice); };
+    sync();
+    onVoiceChange(wrap, sync);
+    return wrap;
+  }
 
   function subsField() {
     const wrap = h("div", { class: "field wide" });
@@ -771,7 +789,7 @@ function renderExport() {
     try {
       await flushSave();
       const { job_id } = await sendJSON(`/api/decks/${d.id}/render`, "POST", {
-        notes: S.notes, voice: st.voice || null, speed: Number(st.speed), pause: Number(st.pause), silent_seconds: Number(st.silent), resolution: Number(st.res),
+        notes: S.notes, voice: st.voice || null, speed: Number(st.speed), pause: Number(st.pause), silent_seconds: Number(st.silent), resolution: Number(st.res), style: st.style || "natural",
         subtitle_languages: (st.subs || []).filter((c) => c === voiceLangCode(st.voice) || S.health?.llm_configured),
       });
       const res = await runJob(job_id, (j) => { bar.style.width = Math.round(j.progress * 100) + "%"; pct.textContent = Math.round(j.progress * 100) + "%"; stepEl.textContent = j.step; });
@@ -844,7 +862,7 @@ function renderResults(box, fresh) {
 }
 
 // ---------- My voices (voice cloning) ----------
-const READ_ALOUD = "Hello, and welcome. In this short recording I speak clearly and at my normal pace, " +
+const READ_ALOUD = "Hello, and welcome. In this short recording I speak clearly and in my own style, " +
   "so the app can learn how my voice sounds. Thank you for listening, and enjoy the presentation.";
 
 function myVoicesDialog() {
@@ -1000,7 +1018,9 @@ async function openMyVoices() {
     h("h3", {}, S.myVoices.length ? "Add another voice" : "Add your voice"),
     h("ol", { class: "guide" },
       h("li", {}, "Find a quiet room and hold the microphone at a normal distance."),
-      h("li", {}, "Press ", h("strong", {}, "Record"), " and read this aloud in your normal speaking voice (10 to 20 seconds):",
+      h("li", {}, "Press ", h("strong", {}, "Record"), " and read this aloud (10 to 20 seconds), with the feeling you want in "
+        + "your videos: your copied voice keeps it. Calm for lectures, warm and lively for intros. You can also say your own "
+        + "words; then type them in the box below.",
         h("blockquote", { class: "read-aloud" }, READ_ALOUD)),
       h("li", {}, "Listen back, give it a name, and save. You can also upload a video or audio file of you speaking English (for example a saved reel): pick a part with only your voice, no music.")),
     h("div", { class: "row-inline rec-row" }, recBtn, upBtn, recTime, fileIn),

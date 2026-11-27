@@ -38,6 +38,7 @@ class PreviewRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1500)
     voice: str | None = None
     speed: float = Field(1.0, ge=0.5, le=2.0)
+    style: Literal["steady", "natural", "expressive"] = "natural"
 
 
 class GenerateRequest(BaseModel):
@@ -67,6 +68,7 @@ class RenderRequest(BaseModel):
     notes: dict[str, str] = {}
     voice: str | None = None
     speed: float = Field(1.0, ge=0.5, le=2.0)
+    style: Literal["steady", "natural", "expressive"] = "natural"
     pause: float = Field(0.8, ge=0, le=5)
     silent_seconds: float = Field(3.0, ge=0.5, le=30)
     resolution: Literal[720, 1080] = 1080
@@ -133,7 +135,7 @@ def get_voices():
 @app.post("/api/tts/preview")
 def tts_preview(req: PreviewRequest):
     try:
-        audio = tts.speech(req.text, req.voice, req.speed, "mp3")
+        audio = tts.speech(req.text, req.voice, req.speed, "mp3", req.style)
     except tts.TTSError as exc:
         raise HTTPException(502, str(exc))
     return Response(audio, media_type="audio/mpeg")

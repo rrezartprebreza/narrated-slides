@@ -67,7 +67,7 @@ def engine_for(voice: str) -> tuple[str, str]:
     return config.TTS_BASE_URL, config.TTS_MODEL
 
 
-def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "mp3") -> bytes:
+def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "mp3", style: str = "natural") -> bytes:
     text = clean_for_speech(text)
     if not text:
         raise TTSError("Nothing to say: the text is empty.")
@@ -80,6 +80,8 @@ def speech(text: str, voice: str | None = None, speed: float = 1.0, fmt: str = "
         "response_format": fmt,
         "speed": speed,
     }
+    if voice.startswith("clone_"):
+        payload["style"] = style  # Delivery: steady, natural or expressive (own voices only)
     last: Exception | None = None
     clone = voice.startswith("clone_")
     resets = 0

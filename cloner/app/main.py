@@ -30,6 +30,13 @@ DEVICE = os.environ.get("CLONE_DEVICE", "cpu")  # mps on Apple Silicon (scripts/
 QWEN_MODEL = os.environ.get("QWEN_MODEL", "Qwen/Qwen3-TTS-12Hz-1.7B-Base")
 QWEN_LANGUAGE = os.environ.get("QWEN_LANGUAGE", "English")
 MAX_CLIP = 20.0  # seconds kept from an upload
+# How much the delivery may vary from sentence to sentence. The emotion itself comes from the reference recording
+# (the model copies its tone); these sampling settings decide how freely it plays with it.
+STYLES = {
+    "steady": {"temperature": 0.6, "top_p": 0.8},
+    "natural": {},  # the model's own defaults
+    "expressive": {"temperature": 1.05, "top_p": 0.95},
+}
 MAX_UPLOAD = 100 * 1024 * 1024  # videos (e.g. a saved reel) are fine: only the audio is kept
 MEDIA = {"mp3": "audio/mpeg", "wav": "audio/wav"}
 
@@ -76,11 +83,12 @@ class Engine:
             self.prompts[key] = prompt
         return self.prompts[key]
 
-    def _say(self, chunk: str, prompt):
+    def _say(self, chunk: str, prompt, style: str = "natural"):
         import numpy as np
 
         try:
-            wavs, sr = self.model.generate_voice_clone(text=chunk, language=QWEN_LANGUAGE, voice_clone_prompt=prompt)
+            wavs, sr = self.model.generate_voice_clone(text=chunk, language=QWEN_LANGUAGE, voice_clone_prompt=prompt,
+                                                       **STYLES.get(style, {}))
         except RuntimeError as exc:
             if "probability tensor" not in str(exc):
                 raise
@@ -102,7 +110,7 @@ class Engine:
     def forget(self, voice_id: str) -> None:
         self.prompts = {k: v for k, v in self.prompts.items() if not k[0].endswith(f"/{voice_id}.wav")}
 
-    def wav(self, text: str, ref: Path) -> bytes:
+    def wav(self, text: str, ref: Path, style: str = "natural") -> bytes:
         """Generate sentence by sentence (long inputs make the model drift) and join as 16-bit WAV."""
         import numpy as np
 
@@ -110,7 +118,7 @@ class Engine:
         with self.lock:
             prompt = self._prompt(ref)
             for chunk in split_text(text):
-                pieces.append(self._say(chunk, prompt))
+                pieces.append(self._say(chunk, prompt, style))
                 pieces.append(np.zeros(int(self.sr * 0.25), dtype=np.float32))
         audio = np.concatenate(pieces) if pieces else np.zeros(1, dtype=np.float32)
         pcm = (np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes()
@@ -199,7 +207,7 @@ def live():
 def health():
     body = {"status": "ready" if engine.model else ("error" if engine.error else "loading"),
             "error": engine.error, "voices": len(voice_meta()), "model": engine.kind,
-            "transcript": True}
+            "transcript": True, "styles": list(STYLES)}
     return body if engine.model else JSONResponse(body, status_code=503)
 
 
@@ -267,6 +275,7 @@ class SpeechRequest(BaseModel):
     model: str | None = None
     speed: float = 1.0
     response_format: str = "mp3"
+    style: str = Field("natural", pattern="^(steady|natural|expressive)$")  # Delivery
 
 
 @app.post("/v1/audio/speech")
@@ -278,7 +287,7 @@ def speech(req: SpeechRequest):
         raise HTTPException(400, f"Unknown voice '{req.voice}'.")
     if engine.model is None:
         raise HTTPException(503, engine.error or "The voice-cloning model is still loading. Try again in a minute.")
-    audio = engine.wav(req.input, ref)
+    audio = engine.wav(req.input, ref, req.style)
     speed = max(0.5, min(2.0, req.speed))
     filters = [] if abs(speed - 1.0) < 0.01 else ["-af", f"atempo={speed}"]
     if req.response_format == "mp3":
