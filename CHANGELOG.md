@@ -2,6 +2,8 @@
 
 ## v1.5.0 (2026-11-27)
 
+- `scripts/run-cloner-mac.sh`: run voice cloning natively on Apple Silicon to use the GPU (MPS); point the app at it
+  with `CLONE_TTS_URL`.
 - Faster previews in your own voice: only the opening sentences are previewed, and saved voices are analysed in
   advance (when saved and when the service starts), so the first preview doesn't wait.
 - Much faster cloned voices: Chatterbox Turbo by default (`CLONE_MODEL=turbo`), and the voice sample is analysed once

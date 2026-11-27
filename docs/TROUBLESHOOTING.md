@@ -61,6 +61,7 @@ several GB, and Ollama, Presenton and Kokoro need their own.
   close to the microphone (a headset or AirPods mic is often better than the laptop mic). Record again after updating:
   new recordings are cleaned automatically.
 - Too slow: keep the default `CLONE_MODEL=turbo`. Docker on a Mac can't use the Apple GPU, so cloning runs on the CPU.
+  On an M-series Mac, run cloning natively on the GPU with `./scripts/run-cloner-mac.sh` (see Configuration).
 - Cloning runs on the CPU. Keep notes short, use 720p, or give Docker Desktop more CPUs.
 
 ## "Notes AI" is amber or red

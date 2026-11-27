@@ -23,7 +23,7 @@ services:
       # Second voice engine (Piper) for languages Kokoro lacks; Albanian by default
       EXTRA_TTS_BASE_URL: http://piper:8000/v1
       # Optional voice cloning (start with --profile clone)
-      CLONE_TTS_URL: http://cloner:8000
+      CLONE_TTS_URL: ${CLONE_TTS_URL:-http://cloner:8000}
       # Optional: model that writes missing speaker notes (OpenAI-compatible chat API)
       NOTES_LLM_BASE_URL: ${NOTES_LLM_BASE_URL:-http://ollama:11434/v1}
       NOTES_LLM_MODEL: ${NOTES_LLM_MODEL:-llama3.2:3b}
