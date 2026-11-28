@@ -447,33 +447,47 @@ function timeAgo(ts) {
 }
 
 // ---------- audio preview ----------
+// Only one preview at a time: pressing again stops it, and starting another cancels the one before, so an
+// answer that arrives late (slow voice, busy computer) never plays on top of another.
+let previewSeq = 0;
+let previewAbort = null;
+let previewBtn = null;
 function stopAudio() {
+  previewSeq++;
+  if (previewAbort) { previewAbort.abort(); previewAbort = null; }
   if (S.audio) { S.audio.pause(); URL.revokeObjectURL(S.audio.src); S.audio = null; }
+  previewBtn = null;
   document.dispatchEvent(new Event("ns-audio-stopped"));
 }
 async function playPreview(text, btn, labels) {
-  if (S.audio || btn.dataset.loading) { stopAudio(); return; }
+  const sameButton = previewBtn === btn;
+  if (previewBtn || S.audio) stopAudio();
+  if (sameButton) return;  // second press = Stop
   text = text.trim();
   if (!text) { toast("There's nothing to read yet. Write some notes first.", "info"); return; }
   const clone = isClone(S.settings.voice);
   let limit = 1500;
-  if (clone) {  // own voices are generated on the CPU: preview just the opening sentences
+  if (clone) {  // own voices take longer to generate: preview just the opening sentences
     const first = text.match(/^(.+?[.!?])(\s+.+?[.!?])?(?=\s|$)/s);
     limit = Math.min(first ? first[0].length : 220, 260);
   }
   const original = text.length > limit;
-  btn.dataset.loading = "1";
+  const seq = ++previewSeq;
+  const ctrl = new AbortController();
+  previewAbort = ctrl;
+  previewBtn = btn;
   btn.replaceChildren(icon("stop"), clone ? "Speaking in your voice…" : "Loading…");
-  const reset = () => { delete btn.dataset.loading; btn.replaceChildren(icon("play"), labels); document.removeEventListener("ns-audio-stopped", reset); };
+  const reset = () => { btn.replaceChildren(icon("play"), labels); document.removeEventListener("ns-audio-stopped", reset); };
   document.addEventListener("ns-audio-stopped", reset);
   try {
     const res = await api("/api/tts/preview", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" }, signal: ctrl.signal,
       body: JSON.stringify({ text: text.slice(0, limit), voice: S.settings.voice || null, speed: Number(S.settings.speed) || 1, style: S.settings.style || "natural" }),
     });
-    const url = URL.createObjectURL(await res.blob());
-    if (!btn.dataset.loading) { URL.revokeObjectURL(url); return; } // cancelled while loading
-    const a = new Audio(url);
+    const blob = await res.blob();
+    if (seq !== previewSeq) return;  // stopped or replaced while loading
+    previewAbort = null;
+    const a = new Audio(URL.createObjectURL(blob));
     S.audio = a;
     a.onended = stopAudio;
     a.onerror = () => { toast("Couldn't play that audio.", "error"); stopAudio(); };
@@ -481,6 +495,7 @@ async function playPreview(text, btn, labels) {
     await a.play();
     if (original) toast(clone ? "Previewing the first sentences in your voice. The video uses all of them." : "Previewing the first part of a long note.", "info", 3000);
   } catch (e) {
+    if (seq !== previewSeq) return;  // cancelled: not an error
     toast(e.message, "error");
     stopAudio();
   }

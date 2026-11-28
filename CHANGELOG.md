@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.8.3 (2026-11-28)
+
+- Preview plays one voice at a time: pressing again stops it, and a new preview cancels the one still loading, so
+  late answers no longer play on top of each other.
+- `run-cloner-mac.sh` stop/start also catch a leftover copy of the voice service (two copies could fill the Mac's memory).
+
 ## v1.8.2 (2026-11-28)
 
 - Your own voice: cut the long silence Qwen3-TTS sometimes adds after a sentence (up to several seconds per slide,
