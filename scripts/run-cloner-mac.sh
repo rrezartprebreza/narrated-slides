@@ -22,7 +22,8 @@ cd "$(dirname "$0")/.."
 PIDFILE="data/cloner/cloner.pid"
 LOGFILE="data/cloner/cloner.log"
 running() { [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; }
-port_pids() { lsof -ti tcp:8890 -sTCP:LISTEN 2>/dev/null | grep . ; }   # also finds one started in another window
+port_pids() {  # the service on 8890, plus any leftover copy (each copy holds the whole model in memory)
+  { lsof -ti tcp:8890 -sTCP:LISTEN 2>/dev/null; pgrep -f "uvicorn app.main:app.*--port 8890" 2>/dev/null; } | sort -u | grep . ; }
 case "${1:-}" in
   start)
     if running || port_pids >/dev/null; then
