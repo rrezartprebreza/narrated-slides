@@ -96,7 +96,7 @@ class Engine:
             wavs, sr = self.model.generate_voice_clone(text=chunk, language=QWEN_LANGUAGE, voice_clone_prompt=prompt,
                                                        do_sample=False)
         self.sr = sr
-        return np.asarray(wavs[0], dtype=np.float32).reshape(-1)
+        return tidy(wavs[0], sr)
 
     def warm(self, ref: Path) -> None:
         if self.model is None or not ref.exists():
@@ -129,6 +129,42 @@ class Engine:
             wf.setframerate(self.sr)
             wf.writeframes(pcm)
         return buf.getvalue()
+
+
+def tidy(audio, sr: int, keep_head: float = 0.05, keep_tail: float = 0.12, max_gap: float = 0.6):
+    """Cut the silence Qwen3-TTS sometimes leaves before/after a sentence (it can run for seconds and makes the video
+    feel stuck) and shorten very long pauses inside it."""
+    import numpy as np
+
+    audio = np.asarray(audio, dtype=np.float32).reshape(-1)
+    hop = max(1, int(sr * 0.01))
+    n = len(audio) // hop
+    if n == 0:
+        return audio
+    rms = np.sqrt((audio[: n * hop].reshape(n, hop) ** 2).mean(axis=1))
+    loud = rms > max(float(rms.max()) * 0.02, 1e-4)  # about -34 dB below the loudest part
+    if not loud.any():
+        return audio[:0]
+    first, last = int(np.argmax(loud)), n - 1 - int(np.argmax(loud[::-1]))
+    start = max(0, first * hop - int(sr * keep_head))
+    end = min(len(audio), (last + 1) * hop + int(sr * keep_tail))
+    # shorten long quiet stretches inside the sentence
+    keep, run_start, gap = [], None, int(max_gap / 0.01)
+    for i in range(first, last + 1):
+        if not loud[i]:
+            run_start = i if run_start is None else run_start
+            continue
+        if run_start is not None and i - run_start > gap:
+            keep.append((run_start + gap // 2, i - gap // 2))  # frames to drop
+        run_start = None
+    if not keep:
+        return audio[start:end]
+    pieces, pos = [], start
+    for a, b in keep:
+        pieces.append(audio[pos:a * hop])
+        pos = b * hop
+    pieces.append(audio[pos:end])
+    return np.concatenate(pieces)
 
 
 def split_text(text: str, limit: int = 280) -> list[str]:

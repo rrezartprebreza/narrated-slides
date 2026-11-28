@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.8.2 (2026-11-28)
+
+- Your own voice: cut the long silence Qwen3-TTS sometimes adds after a sentence (up to several seconds per slide,
+  which made videos feel stuck) and shorten very long pauses inside a sentence.
+
 ## v1.8.1 (2026-11-27)
 
 - `scripts/run-ollama-mac.sh`: run the notes AI natively on an Apple Silicon Mac (GPU) instead of in Docker, so Docker

@@ -155,3 +155,15 @@ def test_delivery_style_sets_sampling(client):
     client.post("/v1/audio/speech", json={"input": "Hi.", "voice": "clone_s", "style": "steady"})
     assert fake.kwargs["temperature"] < 0.7
     assert client.post("/v1/audio/speech", json={"input": "Hi.", "voice": "clone_s", "style": "angry"}).status_code == 422
+
+
+def test_tidy_cuts_long_silences():
+    sr = 24000
+    tone = lambda sec: (0.3 * np.sin(np.arange(int(sr * sec)) / 5)).astype(np.float32)
+    quiet = lambda sec: np.full(int(sr * sec), 1e-5, dtype=np.float32)
+    audio = np.concatenate([quiet(1.0), tone(1.0), quiet(2.0), tone(0.5), quiet(3.5)])
+    out = main.tidy(audio, sr)
+    assert 1.5 + 0.6 <= len(out) / sr <= 1.5 + 0.6 + 0.25  # speech kept, 1 s head and 3.5 s tail gone, gap shortened
+    short = np.concatenate([tone(1.0), quiet(0.3), tone(1.0)])
+    assert abs(len(main.tidy(short, sr)) / sr - 2.3) < 0.15  # normal pauses untouched
+    assert len(main.tidy(quiet(1.0), sr)) == 0
